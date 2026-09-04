@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "id": "omaantigravity",
+  "name": "OmaAntigravity",
+  "version": "1.0.0",
+  "author": "Sebastian Langer",
+  "license": "MIT",
+  "description": "Real-time Antigravity CLI quota limits, 5-hour and weekly window meters, and reset countdowns for Omarchy bar.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Antigravity",
+    "description": "Monitor Antigravity CLI quota limits, 5-hour & weekly reset countdowns.",
+    "category": "AI",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "pollIntervalSec": 300,
+      "showPercentageInBar": true,
+      "barMetric": "lowest",
+      "barIcon": "󰒋"
+    },
+    "schema": [
+      {
+        "key": "pollIntervalSec",
+        "type": "integer",
+        "label": "Poll interval (seconds)",
+        "description": "How often to check for quota updates in background (default 300s).",
+        "min": 30,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 300
+      },
+      {
+        "key": "showPercentageInBar",
+        "type": "boolean",
+        "label": "Show percentage in bar",
+        "description": "Display remaining quota percentage next to the icon in the bar.",
+        "defaultValue": true
+      },
+      {
+        "key": "barMetric",
+        "type": "enum",
+        "label": "Bar metric",
+        "description": "Which quota limit percentage to show in the bar.",
+        "options": [
+          "lowest",
+          "gemini-5h",
+          "gemini-weekly",
+          "3p-5h",
+          "3p-weekly"
+        ],
+        "defaultValue": "lowest"
+      },
+      {
+        "key": "barIcon",
+        "type": "string",
+        "label": "Bar icon",
+        "description": "Nerd Font icon glyph for the bar button.",
+        "defaultValue": "󰒋"
+      }
+    ]
+  }
+}
