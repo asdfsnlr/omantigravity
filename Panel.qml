@@ -21,7 +21,7 @@ Panel {
   // ── Settings ────────────────────────────────────────────────────────────────
   property int pollIntervalSec: 300
   property bool showPercentageInBar: true
-  property string barMetric: "lowest"
+  property string barMetric: "gemini"
   property string barIcon: "λ"
 
   // ── Theme / Palette ─────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ Panel {
     pollIntervalSec = Math.max(30, Math.min(3600, setting("pollIntervalSec", 300)))
     pollTimer.interval = pollIntervalSec * 1000
     showPercentageInBar = setting("showPercentageInBar", true)
-    barMetric = setting("barMetric", "lowest")
+    barMetric = setting("barMetric", "gemini")
     barIcon = setting("barIcon", "λ")
   }
 
@@ -438,42 +438,6 @@ Panel {
                   }
                 }
               }
-            }
-          }
-        }
-
-        // ── Info Tip (Compact, 1 line) ─────────────────────────────────────
-        BorderSurface {
-          Layout.fillWidth: true
-          color: root.subtle
-          borderSpec: Border.flat(root.borderCol, 1)
-          radius: Style.cornerRadius
-          padding: Style.space(6)
-          implicitHeight: tipLayout.implicitHeight + contentTopInset + contentBottomInset
-
-          RowLayout {
-            id: tipLayout
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.margins: Style.space(6)
-            spacing: Style.space(6)
-
-            Text {
-              text: "󰌵"
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              Layout.alignment: Qt.AlignVCenter
-            }
-
-            Text {
-              Layout.fillWidth: true
-              text: "5h window smooths aggregate demand · Weekly limit is tied to tier"
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              elide: Text.ElideRight
             }
           }
         }

@@ -18,7 +18,25 @@ function getMetricValue(data, metricKey) {
     return "--"
   }
   
-  if (!metricKey || metricKey === "lowest") {
+  var key = metricKey || "gemini"
+
+  // Gemini model group available limit (lowest remaining among Gemini limits)
+  if (key === "gemini") {
+    for (var i = 0; i < data.groups.length; i++) {
+      var grp = data.groups[i]
+      if (grp.is_gemini || (grp.name && grp.name.toLowerCase().indexOf("gemini") !== -1)) {
+        var buckets = grp.buckets || []
+        var lowest = 100
+        for (var j = 0; j < buckets.length; j++) {
+          var val = buckets[j].remaining_pct !== undefined ? buckets[j].remaining_pct : 100
+          if (val < lowest) lowest = val
+        }
+        return lowest
+      }
+    }
+  }
+
+  if (key === "lowest") {
     if (data.overall && typeof data.overall.lowest_remaining_pct === "number") {
       return data.overall.lowest_remaining_pct
     }
@@ -30,7 +48,7 @@ function getMetricValue(data, metricKey) {
     var buckets = grp.buckets || []
     for (var j = 0; j < buckets.length; j++) {
       var b = buckets[j]
-      if (b.id === metricKey || b.window === metricKey) {
+      if (b.id === key || b.window === key) {
         return b.remaining_pct !== undefined ? b.remaining_pct : 100
       }
     }
@@ -38,18 +56,19 @@ function getMetricValue(data, metricKey) {
 
   return (data.overall && typeof data.overall.lowest_remaining_pct === "number") 
     ? data.overall.lowest_remaining_pct 
-    : 100
+    : "--"
 }
 
 function formatBarText(data, showPercentage, barIcon, metricKey) {
-  var icon = barIcon || "󰒋"
+  var icon = barIcon || "λ"
   if (!showPercentage) {
     return icon
   }
   if (!data || !data.groups || data.groups.length === 0) {
     return icon
   }
-  var val = getMetricValue(data, metricKey)
+  var val = getMetricValue(data, metricKey || "gemini")
+  if (val === "--") return icon
   return icon + " " + val + "%"
 }
 

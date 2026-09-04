@@ -21,7 +21,7 @@
     "defaults": {
       "pollIntervalSec": 300,
       "showPercentageInBar": true,
-      "barMetric": "lowest",
+      "barMetric": "gemini",
       "barIcon": "λ"
     },
     "schema": [
@@ -48,13 +48,14 @@
         "label": "Bar metric",
         "description": "Which quota limit percentage to show in the bar.",
         "options": [
+          "gemini",
           "lowest",
           "gemini-5h",
           "gemini-weekly",
           "3p-5h",
           "3p-weekly"
         ],
-        "defaultValue": "lowest"
+        "defaultValue": "gemini"
       },
       {
         "key": "barIcon",
