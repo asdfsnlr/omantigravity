@@ -284,16 +284,16 @@ Panel {
           Layout.fillWidth: true
           title: "Antigravity Quota"
           meta: {
-            var parts = []
-            if (root.usageData.active_model && root.usageData.active_model.label) {
-              parts.push(root.usageData.active_model.label)
+            var model = root.usageData && root.usageData.active_model ? root.usageData.active_model : null
+            if (!model || !model.label) {
+              return "Google Antigravity CLI"
             }
-            if (root.usageData.last_updated) {
-              parts.push("Updated " + root.usageData.last_updated)
-            } else if (root.loading) {
-              parts.push("Updating...")
+            var name = model.label.replace(/\s*\((Low|Medium|High)\)/i, "")
+            var effort = model.effort ? (model.effort.charAt(0).toUpperCase() + model.effort.slice(1)) : ""
+            if (effort) {
+              return name + " · Reasoning: " + effort
             }
-            return parts.length > 0 ? parts.join(" · ") : "Google Antigravity CLI"
+            return model.label
           }
           foreground: root.hasAlerts ? root.urgent : root.fg
           fontFamily: root.fontFamily
