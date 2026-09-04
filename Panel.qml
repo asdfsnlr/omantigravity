@@ -401,11 +401,23 @@ Panel {
               required property var modelData
               required property int index
 
-              readonly property bool isSelected: root.barMetric === modelData.key
+              readonly property bool isSelected: {
+                var current = (root.barMetric || "gemini").toLowerCase()
+                if (modelData.key === "gemini") {
+                  return current === "gemini" || current.indexOf("gemini") === 0
+                }
+                if (modelData.key === "3p") {
+                  return current === "3p" || current.indexOf("3p") === 0 || current.indexOf("claude") !== -1 || current.indexOf("gpt") !== -1
+                }
+                if (modelData.key === "lowest") {
+                  return current === "lowest"
+                }
+                return current === modelData.key
+              }
               height: Style.space(24)
               implicitWidth: chipRow.implicitWidth + Style.space(16)
               radius: Style.cornerRadius
-              color: isSelected ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.16) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+              color: isSelected ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
               border.width: 1
               border.color: isSelected ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
 
@@ -655,14 +667,14 @@ Panel {
                   readonly property bool isBarActive: root.barMetric === modelData.id
                   readonly property bool isCritical: modelData.remaining_pct <= root.alertThresholdPct
                   Layout.fillWidth: true
-                  implicitHeight: bucketCol.implicitHeight + Style.space(4)
+                  implicitHeight: bucketCol.implicitHeight + Style.space(6)
 
                   ColumnLayout {
                     id: bucketCol
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    spacing: Style.space(2)
+                    spacing: Style.space(5)
 
                     RowLayout {
                       Layout.fillWidth: true
@@ -682,9 +694,9 @@ Panel {
                         height: Style.space(16)
                         implicitWidth: barTagText.implicitWidth + Style.space(8)
                         radius: Style.cornerRadius
-                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
                         border.width: 1
-                        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
+                        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.25)
 
                         Text {
                           id: barTagText
@@ -730,6 +742,7 @@ Panel {
                     // Rounded Meter Bar
                     Item {
                       Layout.fillWidth: true
+                      Layout.topMargin: Style.space(2)
                       implicitHeight: Style.space(6)
 
                       Rectangle {
