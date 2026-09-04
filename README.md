@@ -53,14 +53,31 @@ Omarchy will hot-reload automatically on save.
 
 ## Configuration Options
 
-Settings can be customized in `~/.config/omarchy/shell.json`:
+Settings can be customized directly in the panel UI (clicking the group chips or any limit row), via `omarchy bar set`, or in `~/.config/omarchy/shell.json`:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `pollIntervalSec` | integer | `300` | Background refresh interval in seconds (30s – 3600s) |
 | `showPercentageInBar` | boolean | `true` | Display remaining percentage next to the bar icon |
-| `barMetric` | enum | `"lowest"` | Which metric to show in the bar: `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
-| `barIcon` | string | `"󰒋"` | Nerd Font icon glyph displayed on the bar |
+| `barMetric` | enum | `"gemini"` | Quota group or limit to show in the bar: `gemini`, `3p`, `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
+| `barIcon` | string | `"λ"` | Icon glyph displayed on the bar |
+
+### Configure via CLI
+
+```bash
+# Show Gemini's available limit (default)
+omarchy bar set omaantigravity barMetric gemini
+
+# Show Claude and GPT models available limit
+omarchy bar set omaantigravity barMetric 3p
+
+# Show the lowest remaining quota overall
+omarchy bar set omaantigravity barMetric lowest
+
+# Lock to a specific window
+omarchy bar set omaantigravity barMetric gemini-5h
+omarchy bar set omaantigravity barMetric gemini-weekly
+```
 
 ---
 

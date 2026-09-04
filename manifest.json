@@ -49,6 +49,7 @@
         "description": "Which quota limit percentage to show in the bar.",
         "options": [
           "gemini",
+          "3p",
           "lowest",
           "gemini-5h",
           "gemini-weekly",

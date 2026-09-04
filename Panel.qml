@@ -48,6 +48,18 @@ Panel {
     barIcon = setting("barIcon", "λ")
   }
 
+  function setBarMetric(metric) {
+    if (!metric) return
+    root.barMetric = metric
+    var snap = Object.assign({}, root.settings, { barMetric: metric })
+    root.settings = snap
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
+      bar.shell.updateEntryInline(root.moduleName, { barMetric: metric })
+    }
+    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "barMetric", metric]
+    saveConfigProc.running = true
+  }
+
   function pathFromUrl(url) {
     var value = String(url || "")
     if (value.indexOf("file://") === 0)
@@ -133,6 +145,10 @@ Panel {
         }
       }
     }
+  }
+
+  Process {
+    id: saveConfigProc
   }
 
   // ── Background Polling Timer ────────────────────────────────────────────────
@@ -242,6 +258,71 @@ Panel {
         PanelSeparator {
           Layout.fillWidth: true
           foreground: root.fg
+        }
+
+        // ── Quota Group Selector for Bar Widget ────────────────────────────
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+
+          Text {
+            text: "En barra:"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          Repeater {
+            model: [
+              { key: "gemini", label: "Gemini", icon: "󰘧" },
+              { key: "3p", label: "Claude & GPT", icon: "󰚩" },
+              { key: "lowest", label: "Mínimo", icon: "󰻌" }
+            ]
+
+            delegate: Rectangle {
+              required property var modelData
+              required property int index
+
+              readonly property bool isSelected: root.barMetric === modelData.key
+              height: Style.space(22)
+              implicitWidth: chipRow.implicitWidth + Style.space(14)
+              radius: height / 2
+              color: isSelected ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.16) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+              border.width: isSelected ? 1 : 0
+              border.color: root.fg
+
+              RowLayout {
+                id: chipRow
+                anchors.centerIn: parent
+                spacing: Style.space(4)
+
+                Text {
+                  text: modelData.icon
+                  color: isSelected ? root.fg : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+
+                Text {
+                  text: modelData.label
+                  color: isSelected ? root.fg : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: isSelected
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: root.setBarMetric(modelData.key)
+              }
+            }
+          }
+
+          Item { Layout.fillWidth: true }
         }
 
         // ── Error View ─────────────────────────────────────────────────────
@@ -361,80 +442,115 @@ Panel {
               Repeater {
                 model: modelData.buckets || []
 
-                delegate: ColumnLayout {
+                delegate: Item {
+                  id: bucketItem
                   required property var modelData
                   required property int index
 
+                  readonly property bool isBarActive: root.barMetric === modelData.id
                   Layout.fillWidth: true
-                  spacing: Style.space(2)
+                  implicitHeight: bucketCol.implicitHeight + Style.space(4)
 
-                  RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(6)
-
-                    Text {
-                      text: modelData.window_title || modelData.name || "Limit"
-                      color: root.fg
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      font.bold: true
-                    }
-
-                    Item { Layout.fillWidth: true }
+                  ColumnLayout {
+                    id: bucketCol
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    spacing: Style.space(2)
 
                     RowLayout {
-                      spacing: Style.space(2)
-                      visible: modelData.reset_countdown !== ""
+                      Layout.fillWidth: true
+                      spacing: Style.space(6)
 
                       Text {
-                        text: "󰅐"
-                        color: root.dim
+                        text: modelData.window_title || modelData.name || "Limit"
+                        color: root.fg
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
+                        font.bold: true
+                      }
+
+                      // Badge if this specific bucket is selected for bar
+                      Rectangle {
+                        visible: bucketItem.isBarActive
+                        height: Style.space(16)
+                        implicitWidth: barTagText.implicitWidth + Style.space(8)
+                        radius: height / 2
+                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
+
+                        Text {
+                          id: barTagText
+                          anchors.centerIn: parent
+                          text: "󰄬 Barra"
+                          color: root.fg
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                          font.bold: true
+                        }
+                      }
+
+                      Item { Layout.fillWidth: true }
+
+                      RowLayout {
+                        spacing: Style.space(2)
+                        visible: modelData.reset_countdown !== ""
+
+                        Text {
+                          text: "󰅐"
+                          color: root.dim
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                        }
+
+                        Text {
+                          text: modelData.reset_countdown
+                          color: root.dim
+                          font.family: root.fontFamily
+                          font.pixelSize: Style.font.caption
+                        }
                       }
 
                       Text {
-                        text: modelData.reset_countdown
-                        color: root.dim
+                        text: modelData.remaining_pct + "%"
+                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
+                        font.bold: true
                       }
                     }
 
-                    Text {
-                      text: modelData.remaining_pct + "%"
-                      color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      font.bold: true
+                    // Rounded Meter Bar
+                    Item {
+                      Layout.fillWidth: true
+                      implicitHeight: Style.space(6)
+
+                      Rectangle {
+                        id: trackRect
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: root.track
+                      }
+
+                      Rectangle {
+                        anchors.left: trackRect.left
+                        anchors.verticalCenter: trackRect.verticalCenter
+                        height: trackRect.height
+                        radius: trackRect.radius
+                        width: trackRect.width * Math.max(0, Math.min(1, modelData.remaining_fraction))
+                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
+
+                        Behavior on width {
+                          NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                        }
+                      }
                     }
                   }
 
-                  // Rounded Meter Bar
-                  Item {
-                    id: meterItem
-                    Layout.fillWidth: true
-                    implicitHeight: Style.space(6)
-
-                    Rectangle {
-                      id: trackRect
-                      anchors.fill: parent
-                      radius: height / 2
-                      color: root.track
-                    }
-
-                    Rectangle {
-                      anchors.left: trackRect.left
-                      anchors.verticalCenter: trackRect.verticalCenter
-                      height: trackRect.height
-                      radius: trackRect.radius
-                      width: trackRect.width * Math.max(0, Math.min(1, modelData.remaining_fraction))
-                      color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
-
-                      Behavior on width {
-                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
-                      }
-                    }
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onClicked: root.setBarMetric(modelData.id)
                   }
                 }
               }

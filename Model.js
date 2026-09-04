@@ -36,6 +36,22 @@ function getMetricValue(data, metricKey) {
     }
   }
 
+  // Claude / GPT model group available limit
+  if (key === "3p" || key === "claude" || key === "gpt" || key === "claude-gpt") {
+    for (var i = 0; i < data.groups.length; i++) {
+      var grp = data.groups[i]
+      if (!grp.is_gemini && grp.name && (grp.name.toLowerCase().indexOf("claude") !== -1 || grp.name.toLowerCase().indexOf("gpt") !== -1)) {
+        var buckets = grp.buckets || []
+        var lowest = 100
+        for (var j = 0; j < buckets.length; j++) {
+          var val = buckets[j].remaining_pct !== undefined ? buckets[j].remaining_pct : 100
+          if (val < lowest) lowest = val
+        }
+        return lowest
+      }
+    }
+  }
+
   if (key === "lowest") {
     if (data.overall && typeof data.overall.lowest_remaining_pct === "number") {
       return data.overall.lowest_remaining_pct
@@ -91,4 +107,15 @@ function timeAgo(timestamp) {
   if (mins < 60) return mins + "m ago"
   var hrs = Math.floor(mins / 60)
   return hrs + "h ago"
+}
+
+function metricLabel(key) {
+  if (key === "gemini") return "Gemini"
+  if (key === "3p" || key === "claude" || key === "gpt") return "Claude & GPT"
+  if (key === "lowest") return "Mínimo Global"
+  if (key === "gemini-5h") return "Gemini (5h)"
+  if (key === "gemini-weekly") return "Gemini (Semanal)"
+  if (key === "3p-5h") return "Claude/GPT (5h)"
+  if (key === "3p-weekly") return "Claude/GPT (Semanal)"
+  return key
 }
