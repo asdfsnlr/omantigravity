@@ -88,14 +88,42 @@ function formatBarText(data, showPercentage, barIcon, metricKey) {
   return icon + " " + val + "%"
 }
 
-function getStatusColor(remainingPct, fg, urgentColor, warningColor) {
-  if (remainingPct <= 15) {
+function getStatusColor(remainingPct, fg, urgentColor, warningColor, alertThreshold) {
+  var threshold = (typeof alertThreshold === "number" && alertThreshold > 0) ? alertThreshold : 20
+  if (remainingPct <= threshold) {
     return urgentColor
   }
-  if (remainingPct <= 30) {
+  if (remainingPct <= threshold + 10) {
     return warningColor
   }
   return fg
+}
+
+function findAlerts(data, alertThreshold) {
+  var threshold = (typeof alertThreshold === "number" && alertThreshold > 0) ? alertThreshold : 20
+  var alerts = []
+  if (!data || !data.groups || !Array.isArray(data.groups)) return alerts
+  
+  for (var i = 0; i < data.groups.length; i++) {
+    var grp = data.groups[i]
+    var buckets = grp.buckets || []
+    for (var j = 0; j < buckets.length; j++) {
+      var b = buckets[j]
+      var pct = b.remaining_pct !== undefined ? b.remaining_pct : 100
+      if (pct <= threshold) {
+        alerts.push({
+          id: b.id,
+          group: grp.name,
+          bucket: b.window_title || b.name,
+          window: b.window,
+          pct: pct,
+          threshold: threshold,
+          reset_countdown: b.reset_countdown
+        })
+      }
+    }
+  }
+  return alerts
 }
 
 function timeAgo(timestamp) {

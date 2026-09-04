@@ -17,12 +17,19 @@ Panel {
   property var usageData: ({ status: "loading", groups: [], overall: { lowest_remaining_pct: 100 } })
   property bool loading: fetchProc.running
   property int dataVersion: 0
+  property var notifiedAlerts: ({})
 
   // ── Settings ────────────────────────────────────────────────────────────────
   property int pollIntervalSec: 300
   property bool showPercentageInBar: true
   property string barMetric: "gemini"
   property string barIcon: "λ"
+  property int alertThresholdPct: 20
+  property bool enableNotifications: true
+
+  // ── Computed Alerts ─────────────────────────────────────────────────────────
+  readonly property var activeAlerts: Model.findAlerts(root.usageData, root.alertThresholdPct)
+  readonly property bool hasAlerts: activeAlerts.length > 0
 
   // ── Theme / Palette ─────────────────────────────────────────────────────────
   readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
@@ -34,7 +41,7 @@ Panel {
   readonly property color track: Style.selectedFillFor(fg, Color.accent)
   readonly property string fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers & Actions ───────────────────────────────────────────────────────
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -46,6 +53,8 @@ Panel {
     showPercentageInBar = setting("showPercentageInBar", true)
     barMetric = setting("barMetric", "gemini")
     barIcon = setting("barIcon", "λ")
+    alertThresholdPct = Math.max(5, Math.min(50, setting("alertThresholdPct", 20)))
+    enableNotifications = setting("enableNotifications", true)
   }
 
   function setBarMetric(metric) {
@@ -58,6 +67,53 @@ Panel {
     }
     saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "barMetric", metric]
     saveConfigProc.running = true
+  }
+
+  function setAlertThreshold(thresh) {
+    root.alertThresholdPct = thresh
+    var snap = Object.assign({}, root.settings, { alertThresholdPct: thresh })
+    root.settings = snap
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
+      bar.shell.updateEntryInline(root.moduleName, { alertThresholdPct: thresh })
+    }
+    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "alertThresholdPct", String(thresh), "--json"]
+    saveConfigProc.running = true
+    checkAndNotify()
+  }
+
+  function toggleNotifications() {
+    var next = !root.enableNotifications
+    root.enableNotifications = next
+    var snap = Object.assign({}, root.settings, { enableNotifications: next })
+    root.settings = snap
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
+      bar.shell.updateEntryInline(root.moduleName, { enableNotifications: next })
+    }
+    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "enableNotifications", next ? "true" : "false", "--json"]
+    saveConfigProc.running = true
+    if (next) checkAndNotify()
+  }
+
+  function checkAndNotify() {
+    if (!root.enableNotifications || !root.hasAlerts) return
+    var updated = Object.assign({}, root.notifiedAlerts)
+    for (var i = 0; i < root.activeAlerts.length; i++) {
+      var a = root.activeAlerts[i]
+      var key = a.id + "_" + root.alertThresholdPct
+      if (!updated[key]) {
+        updated[key] = true
+        notifyProc.command = [
+          "notify-send",
+          "-a", "Antigravity",
+          "-u", "critical",
+          "-i", "dialog-warning",
+          "Alerta de Cuota Antigravity",
+          a.group + " (" + a.bucket + ") ha llegado al " + a.pct + "% disponible (umbral: " + root.alertThresholdPct + "%)."
+        ]
+        notifyProc.running = true
+      }
+    }
+    root.notifiedAlerts = updated
   }
 
   function pathFromUrl(url) {
@@ -127,6 +183,7 @@ Panel {
           if (parsed && parsed.status === "ok") {
             root.usageData = parsed
             root.dataVersion++
+            root.checkAndNotify()
           }
         }
       }
@@ -142,6 +199,7 @@ Panel {
         if (raw.length > 0 && raw.indexOf("{") === 0) {
           root.usageData = Model.parseData(raw)
           root.dataVersion++
+          root.checkAndNotify()
         }
       }
     }
@@ -149,6 +207,10 @@ Panel {
 
   Process {
     id: saveConfigProc
+  }
+
+  Process {
+    id: notifyProc
   }
 
   // ── Background Polling Timer ────────────────────────────────────────────────
@@ -176,9 +238,18 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: Model.formatBarText(root.usageData, root.showPercentageInBar, root.barIcon, root.barMetric)
+    text: (root.hasAlerts ? "󰀨 " : "") + Model.formatBarText(root.usageData, root.showPercentageInBar, root.barIcon, root.barMetric)
     fixedWidth: -1
-    tooltipText: root.usageData && root.usageData.tooltip ? root.usageData.tooltip : "Antigravity CLI Quota"
+    active: root.hasAlerts
+    useActiveColor: true
+    activeColor: root.urgent
+    tooltipText: {
+      var base = root.usageData && root.usageData.tooltip ? root.usageData.tooltip : "Antigravity CLI Quota"
+      if (root.hasAlerts) {
+        return "⚠️ ¡ALERTA DE CUOTA BAJA! (≤" + root.alertThresholdPct + "%)\n" + base
+      }
+      return base
+    }
     onPressed: function(b) { root.triggerPress(b) }
   }
 
@@ -190,7 +261,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(420))
+    contentWidth: panel.fittedContentWidth(Style.space(430))
     contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight)
 
     PanelKeyCatcher {
@@ -224,14 +295,14 @@ Panel {
             }
             return parts.length > 0 ? parts.join(" · ") : "Google Antigravity CLI"
           }
-          foreground: root.fg
+          foreground: root.hasAlerts ? root.urgent : root.fg
           fontFamily: root.fontFamily
           iconOpacity: 1.0
           iconComponent: Component {
             Text {
               anchors.centerIn: parent
-              text: root.barIcon
-              color: root.fg
+              text: root.hasAlerts ? "󰀨" : root.barIcon
+              color: root.hasAlerts ? root.urgent : root.fg
               font.pixelSize: Style.font.display
               font.family: root.fontFamily
               font.bold: true
@@ -260,7 +331,53 @@ Panel {
           foreground: root.fg
         }
 
-        // ── Quota Group Selector for Bar Widget ────────────────────────────
+        // ── Alert Banner (Visible when any quota is <= alertThresholdPct) ──
+        BorderSurface {
+          visible: root.hasAlerts
+          Layout.fillWidth: true
+          color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.12)
+          borderSpec: Border.flat(root.urgent, 1)
+          radius: Style.cornerRadius
+          padding: Style.space(8)
+          implicitHeight: alertBannerRow.implicitHeight + contentTopInset + contentBottomInset
+
+          RowLayout {
+            id: alertBannerRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.space(8)
+            spacing: Style.space(8)
+
+            Text {
+              text: "󰀨"
+              color: root.urgent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              Layout.alignment: Qt.AlignVCenter
+            }
+
+            Text {
+              Layout.fillWidth: true
+              text: {
+                if (root.activeAlerts.length === 0) return ""
+                var parts = []
+                for (var i = 0; i < root.activeAlerts.length; i++) {
+                  var a = root.activeAlerts[i]
+                  parts.push(a.group + " (" + a.bucket + "): " + a.pct + "%")
+                }
+                return "¡Cuota crítica! " + parts.join(" · ") + " (límite ≤ " + root.alertThresholdPct + "%)"
+              }
+              color: root.urgent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              wrapMode: Text.WordWrap
+            }
+          }
+        }
+
+        // ── Quota Group Selector for Bar Widget (Rectangular & Minimalist) ─
         RowLayout {
           Layout.fillWidth: true
           spacing: Style.space(6)
@@ -285,17 +402,17 @@ Panel {
               required property int index
 
               readonly property bool isSelected: root.barMetric === modelData.key
-              height: Style.space(22)
-              implicitWidth: chipRow.implicitWidth + Style.space(14)
-              radius: height / 2
+              height: Style.space(24)
+              implicitWidth: chipRow.implicitWidth + Style.space(16)
+              radius: Style.cornerRadius
               color: isSelected ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.16) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-              border.width: isSelected ? 1 : 0
-              border.color: root.fg
+              border.width: 1
+              border.color: isSelected ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
 
               RowLayout {
                 id: chipRow
                 anchors.centerIn: parent
-                spacing: Style.space(4)
+                spacing: Style.space(5)
 
                 Text {
                   text: modelData.icon
@@ -323,6 +440,94 @@ Panel {
           }
 
           Item { Layout.fillWidth: true }
+        }
+
+        // ── Alert Threshold & Notification Controls (Rectangular & Minimalist)
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+
+          Text {
+            text: "Alerta:"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          Repeater {
+            model: [10, 15, 20, 25, 30]
+
+            delegate: Rectangle {
+              required property int modelData
+              required property int index
+
+              readonly property bool isSelected: root.alertThresholdPct === modelData
+              height: Style.space(24)
+              implicitWidth: threshText.implicitWidth + Style.space(12)
+              radius: Style.cornerRadius
+              color: isSelected ? Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.18) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+              border.width: 1
+              border.color: isSelected ? root.urgent : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
+
+              Text {
+                id: threshText
+                anchors.centerIn: parent
+                text: modelData + "%"
+                color: isSelected ? root.urgent : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: isSelected
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: root.setAlertThreshold(modelData)
+              }
+            }
+          }
+
+          Item { Layout.fillWidth: true }
+
+          // Desktop notification toggle button
+          Rectangle {
+            height: Style.space(24)
+            implicitWidth: notifRow.implicitWidth + Style.space(12)
+            radius: Style.cornerRadius
+            color: root.enableNotifications ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
+            border.width: 1
+            border.color: root.enableNotifications ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
+
+            RowLayout {
+              id: notifRow
+              anchors.centerIn: parent
+              spacing: Style.space(4)
+
+              Text {
+                text: root.enableNotifications ? "󰂚" : "󰂛"
+                color: root.enableNotifications ? root.fg : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                text: root.enableNotifications ? "Notificar" : "Silencio"
+                color: root.enableNotifications ? root.fg : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: root.enableNotifications
+              }
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              hoverEnabled: true
+              onClicked: root.toggleNotifications()
+            }
+          }
         }
 
         // ── Error View ─────────────────────────────────────────────────────
@@ -448,6 +653,7 @@ Panel {
                   required property int index
 
                   readonly property bool isBarActive: root.barMetric === modelData.id
+                  readonly property bool isCritical: modelData.remaining_pct <= root.alertThresholdPct
                   Layout.fillWidth: true
                   implicitHeight: bucketCol.implicitHeight + Style.space(4)
 
@@ -470,13 +676,15 @@ Panel {
                         font.bold: true
                       }
 
-                      // Badge if this specific bucket is selected for bar
+                      // Badge if this specific bucket is selected for bar (Rectangular & Minimalist)
                       Rectangle {
                         visible: bucketItem.isBarActive
                         height: Style.space(16)
                         implicitWidth: barTagText.implicitWidth + Style.space(8)
-                        radius: height / 2
-                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.15)
+                        radius: Style.cornerRadius
+                        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+                        border.width: 1
+                        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.2)
 
                         Text {
                           id: barTagText
@@ -512,7 +720,7 @@ Panel {
 
                       Text {
                         text: modelData.remaining_pct + "%"
-                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
+                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning, root.alertThresholdPct)
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
                         font.bold: true
@@ -537,7 +745,7 @@ Panel {
                         height: trackRect.height
                         radius: trackRect.radius
                         width: trackRect.width * Math.max(0, Math.min(1, modelData.remaining_fraction))
-                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
+                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning, root.alertThresholdPct)
 
                         Behavior on width {
                           NumberAnimation { duration: 250; easing.type: Easing.OutCubic }

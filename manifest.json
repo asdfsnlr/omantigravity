@@ -22,7 +22,9 @@
       "pollIntervalSec": 300,
       "showPercentageInBar": true,
       "barMetric": "gemini",
-      "barIcon": "λ"
+      "barIcon": "λ",
+      "alertThresholdPct": 20,
+      "enableNotifications": true
     },
     "schema": [
       {
@@ -64,6 +66,23 @@
         "label": "Bar icon",
         "description": "Nerd Font icon glyph for the bar button.",
         "defaultValue": "λ"
+      },
+      {
+        "key": "alertThresholdPct",
+        "type": "integer",
+        "label": "Alert threshold (%)",
+        "description": "Notify when remaining quota falls to or below this percentage.",
+        "min": 5,
+        "max": 50,
+        "step": 5,
+        "defaultValue": 20
+      },
+      {
+        "key": "enableNotifications",
+        "type": "boolean",
+        "label": "Desktop notifications",
+        "description": "Send desktop notification when quota reaches alert threshold.",
+        "defaultValue": true
       }
     ]
   }
