@@ -61,6 +61,8 @@ Settings can be customized directly in the panel UI (clicking the group chips or
 | `showPercentageInBar` | boolean | `true` | Display remaining percentage next to the bar icon |
 | `barMetric` | enum | `"gemini"` | Quota group or limit to show in the bar: `gemini`, `3p`, `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
 | `barIcon` | string | `"λ"` | Icon glyph displayed on the bar |
+| `alertThresholdPct` | integer | `20` | Threshold percentage (5% – 50%) for critical low quota alerts |
+| `enableNotifications` | boolean | `true` | Send desktop notifications via `notify-send` when quota is critical |
 
 ### Configure via CLI
 
@@ -77,6 +79,12 @@ omarchy bar set omaantigravity barMetric lowest
 # Lock to a specific window
 omarchy bar set omaantigravity barMetric gemini-5h
 omarchy bar set omaantigravity barMetric gemini-weekly
+
+# Change alert threshold (e.g. to 25%)
+omarchy bar set omaantigravity alertThresholdPct 25 --json
+
+# Toggle desktop notifications
+omarchy bar set omaantigravity enableNotifications false --json
 ```
 
 ---

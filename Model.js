@@ -140,10 +140,10 @@ function timeAgo(timestamp) {
 function metricLabel(key) {
   if (key === "gemini") return "Gemini"
   if (key === "3p" || key === "claude" || key === "gpt") return "Claude & GPT"
-  if (key === "lowest") return "Mínimo Global"
+  if (key === "lowest") return "Lowest Overall"
   if (key === "gemini-5h") return "Gemini (5h)"
-  if (key === "gemini-weekly") return "Gemini (Semanal)"
+  if (key === "gemini-weekly") return "Gemini (Weekly)"
   if (key === "3p-5h") return "Claude/GPT (5h)"
-  if (key === "3p-weekly") return "Claude/GPT (Semanal)"
+  if (key === "3p-weekly") return "Claude/GPT (Weekly)"
   return key
 }

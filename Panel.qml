@@ -107,8 +107,8 @@ Panel {
           "-a", "Antigravity",
           "-u", "critical",
           "-i", "dialog-warning",
-          "Alerta de Cuota Antigravity",
-          a.group + " (" + a.bucket + ") ha llegado al " + a.pct + "% disponible (umbral: " + root.alertThresholdPct + "%)."
+          "Antigravity Quota Alert",
+          a.group + " (" + a.bucket + ") reached " + a.pct + "% remaining (threshold: " + root.alertThresholdPct + "%)."
         ]
         notifyProc.running = true
       }
@@ -246,7 +246,7 @@ Panel {
     tooltipText: {
       var base = root.usageData && root.usageData.tooltip ? root.usageData.tooltip : "Antigravity CLI Quota"
       if (root.hasAlerts) {
-        return "⚠️ ¡ALERTA DE CUOTA BAJA! (≤" + root.alertThresholdPct + "%)\n" + base
+        return "⚠️ LOW QUOTA ALERT! (≤" + root.alertThresholdPct + "%)\n" + base
       }
       return base
     }
@@ -366,7 +366,7 @@ Panel {
                   var a = root.activeAlerts[i]
                   parts.push(a.group + " (" + a.bucket + "): " + a.pct + "%")
                 }
-                return "¡Cuota crítica! " + parts.join(" · ") + " (límite ≤ " + root.alertThresholdPct + "%)"
+                return "Critical Quota! " + parts.join(" · ") + " (threshold ≤ " + root.alertThresholdPct + "%)"
               }
               color: root.urgent
               font.family: root.fontFamily
@@ -383,7 +383,7 @@ Panel {
           spacing: Style.space(6)
 
           Text {
-            text: "En barra:"
+            text: "On bar:"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -394,7 +394,7 @@ Panel {
             model: [
               { key: "gemini", label: "Gemini", icon: "󰘧" },
               { key: "3p", label: "Claude & GPT", icon: "󰚩" },
-              { key: "lowest", label: "Mínimo", icon: "󰻌" }
+              { key: "lowest", label: "Lowest", icon: "󰻌" }
             ]
 
             delegate: Rectangle {
@@ -448,7 +448,7 @@ Panel {
           spacing: Style.space(6)
 
           Text {
-            text: "Alerta:"
+            text: "Alert:"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -513,7 +513,7 @@ Panel {
               }
 
               Text {
-                text: root.enableNotifications ? "Notificar" : "Silencio"
+                text: root.enableNotifications ? "Notify" : "Muted"
                 color: root.enableNotifications ? root.fg : root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -689,7 +689,7 @@ Panel {
                         Text {
                           id: barTagText
                           anchors.centerIn: parent
-                          text: "󰄬 Barra"
+                          text: "󰄬 On bar"
                           color: root.fg
                           font.family: root.fontFamily
                           font.pixelSize: Style.font.caption
