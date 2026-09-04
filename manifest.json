@@ -22,7 +22,7 @@
       "pollIntervalSec": 300,
       "showPercentageInBar": true,
       "barMetric": "lowest",
-      "barIcon": "󰒋"
+      "barIcon": "λ"
     },
     "schema": [
       {
@@ -61,7 +61,7 @@
         "type": "string",
         "label": "Bar icon",
         "description": "Nerd Font icon glyph for the bar button.",
-        "defaultValue": "󰒋"
+        "defaultValue": "λ"
       }
     ]
   }

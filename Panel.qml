@@ -22,6 +22,7 @@ Panel {
   property int pollIntervalSec: 300
   property bool showPercentageInBar: true
   property string barMetric: "lowest"
+  property string barIcon: "λ"
 
   // ── Theme / Palette ─────────────────────────────────────────────────────────
   readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
@@ -44,6 +45,7 @@ Panel {
     pollTimer.interval = pollIntervalSec * 1000
     showPercentageInBar = setting("showPercentageInBar", true)
     barMetric = setting("barMetric", "lowest")
+    barIcon = setting("barIcon", "λ")
   }
 
   function pathFromUrl(url) {
@@ -158,41 +160,10 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    labelVisible: false
-    fixedWidth: root.showPercentageInBar ? (contentRow.implicitWidth + scaledHorizontalMargin * 2) : (root.bar && root.bar.vertical ? -1 : Style.space(28))
-    fixedHeight: root.bar && root.bar.vertical ? Style.space(28) : -1
+    text: Model.formatBarText(root.usageData, root.showPercentageInBar, root.barIcon, root.barMetric)
+    fixedWidth: -1
     tooltipText: root.usageData && root.usageData.tooltip ? root.usageData.tooltip : "Antigravity CLI Quota"
     onPressed: function(b) { root.triggerPress(b) }
-
-    Row {
-      id: contentRow
-      anchors.centerIn: parent
-      spacing: Style.space(6)
-
-      Image {
-        id: barLogo
-        width: Style.space(16)
-        height: Style.space(16)
-        anchors.verticalCenter: parent.verticalCenter
-        source: Qt.resolvedUrl("assets/antigravity.png")
-        fillMode: Image.PreserveAspectFit
-        smooth: true
-        mipmap: true
-      }
-
-      Text {
-        visible: root.showPercentageInBar
-        anchors.verticalCenter: parent.verticalCenter
-        text: {
-          var v = Model.getMetricValue(root.usageData, root.barMetric)
-          return v === "--" ? "--" : (v + "%")
-        }
-        color: root.bar ? root.bar.barForeground : root.fg
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        renderType: Text.NativeRendering
-      }
-    }
   }
 
   // ── Panel Overlay ───────────────────────────────────────────────────────────
@@ -203,8 +174,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(480))
-    contentHeight: panel.fittedContentHeight(flickableContent.implicitHeight, Style.space(580))
+    contentWidth: panel.fittedContentWidth(Style.space(420))
+    contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -214,117 +185,49 @@ Panel {
         if (t === "r" || t === "R") root.refresh(true)
       }
 
-      Flickable {
-        id: panelFlick
-        anchors.fill: parent
-        contentWidth: width
-        contentHeight: flickableContent.implicitHeight
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.VerticalFlick
+      ColumnLayout {
+        id: contentColumn
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        spacing: Style.space(8)
 
-        ColumnLayout {
-          id: flickableContent
-          width: panelFlick.width
-          spacing: Style.space(12)
-
-          // ── Panel Hero Header ──────────────────────────────────────────────
-          PanelHero {
-            Layout.fillWidth: true
-            title: "Antigravity Quota"
-            meta: {
-              var parts = []
-              if (root.usageData.active_model && root.usageData.active_model.label) {
-                parts.push(root.usageData.active_model.label)
-              }
-              if (root.usageData.last_updated) {
-                parts.push("Updated " + root.usageData.last_updated)
-              } else if (root.loading) {
-                parts.push("Updating...")
-              }
-              return parts.length > 0 ? parts.join(" · ") : "Google Antigravity CLI"
+        // ── Panel Hero Header ──────────────────────────────────────────────
+        PanelHero {
+          Layout.fillWidth: true
+          title: "Antigravity Quota"
+          meta: {
+            var parts = []
+            if (root.usageData.active_model && root.usageData.active_model.label) {
+              parts.push(root.usageData.active_model.label)
             }
-            foreground: root.fg
-            fontFamily: root.fontFamily
-            iconOpacity: 1.0
-            iconComponent: Component {
-              Image {
-                anchors.centerIn: parent
-                width: Style.font.display
-                height: Style.font.display
-                source: Qt.resolvedUrl("assets/antigravity.png")
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                mipmap: true
-              }
+            if (root.usageData.last_updated) {
+              parts.push("Updated " + root.usageData.last_updated)
+            } else if (root.loading) {
+              parts.push("Updating...")
             }
-            trailingControl: Component {
-              RowLayout {
-                spacing: Style.space(6)
-                anchors.verticalCenter: parent.verticalCenter
-
-                Button {
-                  text: root.loading ? "Refreshing..." : "Refresh"
-                  foreground: root.fg
-                  fontFamily: root.fontFamily
-                  fontSize: Style.font.caption
-                  horizontalPadding: Style.spacing.controlPaddingX
-                  verticalPadding: Style.spacing.controlPaddingY
-                  onClicked: root.refresh(true)
-                }
-              }
+            return parts.length > 0 ? parts.join(" · ") : "Google Antigravity CLI"
+          }
+          foreground: root.fg
+          fontFamily: root.fontFamily
+          iconOpacity: 1.0
+          iconComponent: Component {
+            Text {
+              anchors.centerIn: parent
+              text: root.barIcon
+              color: root.fg
+              font.pixelSize: Style.font.display
+              font.family: root.fontFamily
+              font.bold: true
             }
           }
-
-          PanelSeparator {
-            Layout.fillWidth: true
-            foreground: root.fg
-          }
-
-          // ── Error View ─────────────────────────────────────────────────────
-          BorderSurface {
-            visible: root.usageData && root.usageData.status === "error"
-            Layout.fillWidth: true
-            color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.1)
-            borderSpec: Border.flat(root.urgent, 1)
-            radius: Style.cornerRadius
-            padding: Style.space(12)
-
-            ColumnLayout {
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.top: parent.top
+          trailingControl: Component {
+            RowLayout {
               spacing: Style.space(6)
-
-              RowLayout {
-                spacing: Style.space(8)
-                Text {
-                  text: "󰀨"
-                  color: root.urgent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.title
-                }
-                Text {
-                  text: "Antigravity CLI Error"
-                  color: root.fg
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                }
-              }
-
-              Text {
-                Layout.fillWidth: true
-                text: root.usageData.error || "Unable to communicate with Antigravity CLI."
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-              }
+              anchors.verticalCenter: parent.verticalCenter
 
               Button {
-                Layout.topMargin: Style.space(4)
-                text: "Retry Now"
+                text: root.loading ? "Updating..." : "Refresh"
                 foreground: root.fg
                 fontFamily: root.fontFamily
                 fontSize: Style.font.caption
@@ -334,264 +237,269 @@ Panel {
               }
             }
           }
+        }
 
-          // ── Stale Cache Warning ────────────────────────────────────────────
-          BorderSurface {
-            visible: !!root.usageData.stale
-            Layout.fillWidth: true
-            color: Qt.rgba(root.warning.r || 0.9, root.warning.g || 0.6, 0, 0.08)
-            borderSpec: Border.flat(root.warning, 1)
-            radius: Style.cornerRadius
-            padding: Style.space(8)
+        PanelSeparator {
+          Layout.fillWidth: true
+          foreground: root.fg
+        }
+
+        // ── Error View ─────────────────────────────────────────────────────
+        BorderSurface {
+          visible: root.usageData && root.usageData.status === "error"
+          Layout.fillWidth: true
+          color: Qt.rgba(root.urgent.r, root.urgent.g, root.urgent.b, 0.1)
+          borderSpec: Border.flat(root.urgent, 1)
+          radius: Style.cornerRadius
+          padding: Style.space(10)
+          implicitHeight: errBody.implicitHeight + contentTopInset + contentBottomInset
+
+          ColumnLayout {
+            id: errBody
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.space(10)
+            spacing: Style.space(4)
 
             RowLayout {
-              anchors.fill: parent
-              spacing: Style.space(8)
-
+              spacing: Style.space(6)
               Text {
-                text: "󰅐"
-                color: root.warning
+                text: "󰀨"
+                color: root.urgent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
               }
-
               Text {
-                Layout.fillWidth: true
-                text: "Showing cached limits. A fresh background update is in progress."
+                text: "Antigravity CLI Error"
                 color: root.fg
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
               }
             }
-          }
 
-          // ── Model Groups Repeater ──────────────────────────────────────────
-          Repeater {
-            model: root.usageData && root.usageData.groups ? root.usageData.groups : []
-
-            delegate: BorderSurface {
-              required property var modelData
-              required property int index
-
+            Text {
               Layout.fillWidth: true
-              color: root.subtle
-              borderSpec: Border.flat(root.borderCol, 1)
-              radius: Style.cornerRadius
-              padding: Style.space(12)
-              implicitHeight: groupBody.implicitHeight + contentTopInset + contentBottomInset
+              text: root.usageData.error || "Unable to communicate with Antigravity CLI."
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
 
-              ColumnLayout {
-                id: groupBody
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: Style.space(12)
-                spacing: Style.space(12)
-
-                // Group Header
-                RowLayout {
-                  Layout.fillWidth: true
-                  spacing: Style.space(8)
-
-                  Text {
-                    text: modelData.icon || "󰚩"
-                    color: root.fg
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.title
-                    Layout.alignment: Qt.AlignVCenter
-                  }
-
-                  ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-
-                    Text {
-                      text: modelData.name || "Model Group"
-                      color: root.fg
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.body
-                      font.bold: true
-                    }
-
-                    Text {
-                      text: modelData.description || ""
-                      color: root.dim
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      elide: Text.ElideRight
-                      Layout.fillWidth: true
-                      visible: text !== ""
-                    }
-                  }
-                }
-
-                // Buckets Repeater
-                Repeater {
-                  model: modelData.buckets || []
-
-                  delegate: ColumnLayout {
-                    required property var modelData
-                    required property int index
-
-                    Layout.fillWidth: true
-                    spacing: Style.space(4)
-
-                    // Bucket Labels Row
-                    RowLayout {
-                      Layout.fillWidth: true
-                      spacing: Style.space(8)
-
-                      Text {
-                        text: modelData.window_title || modelData.name || "Limit"
-                        color: root.fg
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.bodySmall
-                        font.bold: true
-                      }
-
-                      Item { Layout.fillWidth: true }
-
-                      // Reset Countdown Badge
-                      RowLayout {
-                        spacing: Style.space(3)
-                        visible: modelData.reset_countdown !== ""
-
-                        Text {
-                          text: "󰅐"
-                          color: root.dim
-                          font.family: root.fontFamily
-                          font.pixelSize: Style.font.caption
-                        }
-
-                        Text {
-                          text: "Resets in " + modelData.reset_countdown
-                          color: root.dim
-                          font.family: root.fontFamily
-                          font.pixelSize: Style.font.caption
-                        }
-                      }
-
-                      // Remaining Percentage
-                      Text {
-                        text: modelData.remaining_pct + "% remaining"
-                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
-                        font.family: root.fontFamily
-                        font.pixelSize: Style.font.bodySmall
-                        font.bold: true
-                      }
-                    }
-
-                    // Rounded Meter Bar
-                    Item {
-                      id: meterItem
-                      Layout.fillWidth: true
-                      implicitHeight: Style.space(8)
-
-                      Rectangle {
-                        id: trackRect
-                        anchors.fill: parent
-                        radius: height / 2
-                        color: root.track
-                      }
-
-                      Rectangle {
-                        anchors.left: trackRect.left
-                        anchors.verticalCenter: trackRect.verticalCenter
-                        height: trackRect.height
-                        radius: trackRect.radius
-                        width: trackRect.width * Math.max(0, Math.min(1, modelData.remaining_fraction))
-                        color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
-
-                        Behavior on width {
-                          NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
-                        }
-                      }
-                    }
-
-                    // Optional description/hint
-                    Text {
-                      visible: modelData.description !== ""
-                      Layout.fillWidth: true
-                      text: modelData.description
-                      color: root.dim
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.WordWrap
-                      opacity: 0.85
-                    }
-
-                    Item {
-                      height: Style.space(4)
-                      visible: index < (modelData.buckets ? modelData.buckets.length - 1 : 0)
-                    }
-                  }
-                }
-              }
+            Button {
+              Layout.topMargin: Style.space(2)
+              text: "Retry"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              onClicked: root.refresh(true)
             }
           }
+        }
 
-          // ── Info Card (Explanation of Limits) ──────────────────────────────
-          BorderSurface {
-            visible: root.usageData && root.usageData.description !== undefined && root.usageData.description !== ""
+        // ── Model Groups ───────────────────────────────────────────────────
+        Repeater {
+          model: root.usageData && root.usageData.groups ? root.usageData.groups : []
+
+          delegate: BorderSurface {
+            required property var modelData
+            required property int index
+
             Layout.fillWidth: true
             color: root.subtle
             borderSpec: Border.flat(root.borderCol, 1)
             radius: Style.cornerRadius
-            padding: Style.space(12)
-            implicitHeight: infoLayout.implicitHeight + contentTopInset + contentBottomInset
+            padding: Style.space(8)
+            implicitHeight: groupBody.implicitHeight + contentTopInset + contentBottomInset
 
-            RowLayout {
-              id: infoLayout
+            ColumnLayout {
+              id: groupBody
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.top: parent.top
-              anchors.margins: Style.space(12)
-              spacing: Style.space(10)
+              anchors.margins: Style.space(8)
+              spacing: Style.space(6)
 
-              Text {
-                text: "󰌵"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                Layout.alignment: Qt.AlignTop
+              // Group Header
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.space(6)
+
+                Text {
+                  text: modelData.icon || "󰚩"
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                  text: modelData.name || "Model Group"
+                  color: root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Text {
+                  text: modelData.description ? modelData.description.replace("Models within this group: ", "") : ""
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                  opacity: 0.7
+                }
               }
 
-              Text {
-                Layout.fillWidth: true
-                text: root.usageData.description || ""
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-                lineHeight: 1.25
+              // Buckets
+              Repeater {
+                model: modelData.buckets || []
+
+                delegate: ColumnLayout {
+                  required property var modelData
+                  required property int index
+
+                  Layout.fillWidth: true
+                  spacing: Style.space(2)
+
+                  RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(6)
+
+                    Text {
+                      text: modelData.window_title || modelData.name || "Limit"
+                      color: root.fg
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    RowLayout {
+                      spacing: Style.space(2)
+                      visible: modelData.reset_countdown !== ""
+
+                      Text {
+                        text: "󰅐"
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+
+                      Text {
+                        text: modelData.reset_countdown
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+
+                    Text {
+                      text: modelData.remaining_pct + "%"
+                      color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+                  }
+
+                  // Rounded Meter Bar
+                  Item {
+                    id: meterItem
+                    Layout.fillWidth: true
+                    implicitHeight: Style.space(6)
+
+                    Rectangle {
+                      id: trackRect
+                      anchors.fill: parent
+                      radius: height / 2
+                      color: root.track
+                    }
+
+                    Rectangle {
+                      anchors.left: trackRect.left
+                      anchors.verticalCenter: trackRect.verticalCenter
+                      height: trackRect.height
+                      radius: trackRect.radius
+                      width: trackRect.width * Math.max(0, Math.min(1, modelData.remaining_fraction))
+                      color: Model.getStatusColor(modelData.remaining_pct, root.fg, root.urgent, root.warning)
+
+                      Behavior on width {
+                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
+        }
 
-          // ── Footer / Keyboard Shortcuts ────────────────────────────────────
+        // ── Info Tip (Compact, 1 line) ─────────────────────────────────────
+        BorderSurface {
+          Layout.fillWidth: true
+          color: root.subtle
+          borderSpec: Border.flat(root.borderCol, 1)
+          radius: Style.cornerRadius
+          padding: Style.space(6)
+          implicitHeight: tipLayout.implicitHeight + contentTopInset + contentBottomInset
+
           RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: Style.space(2)
-            Layout.bottomMargin: Style.space(8)
+            id: tipLayout
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.space(6)
+            spacing: Style.space(6)
 
             Text {
-              text: "Shortcuts: [R] Refresh · [Esc] Close"
+              text: "󰌵"
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
-              opacity: 0.7
+              Layout.alignment: Qt.AlignVCenter
             }
 
-            Item { Layout.fillWidth: true }
-
             Text {
-              text: "omarchy / antigravity"
+              Layout.fillWidth: true
+              text: "5h window smooths aggregate demand · Weekly limit is tied to tier"
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
-              opacity: 0.5
+              elide: Text.ElideRight
             }
+          }
+        }
+
+        // ── Footer / Shortcuts ─────────────────────────────────────────────
+        RowLayout {
+          Layout.fillWidth: true
+          Layout.topMargin: Style.space(2)
+          Layout.bottomMargin: Style.space(4)
+
+          Text {
+            text: "[R] Refresh · [Esc] Close"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            opacity: 0.6
+          }
+
+          Item { Layout.fillWidth: true }
+
+          Text {
+            text: "antigravity"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            opacity: 0.4
           }
         }
       }
