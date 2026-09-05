@@ -28,56 +28,24 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
 
 ## Installation
 
-### Method 1: Standard Omarchy Plugin Installation (Recommended)
-
-Install directly from Git using Omarchy's built-in plugin manager:
+Install directly using Omarchy's official plugin manager:
 
 ```bash
-# Add and enable the plugin directly into your bar
+# Add and enable the plugin in your Omarchy status bar
 omarchy plugin add https://github.com/slanger/omaantigravity.git --enable
 ```
 
-If you wish to specify a particular bar section (e.g. `right`):
+If you wish to position it in a specific bar section (e.g. `right`):
 
 ```bash
 omarchy plugin enable omaantigravity --section right
 ```
 
-To update the plugin later:
+To update the plugin to the latest version at any time:
 
 ```bash
 omarchy plugin update omaantigravity
 ```
-
----
-
-### Method 2: Local / Development Symlink
-
-If you cloned or develop the repository locally:
-
-```bash
-# 1. Create plugins directory if needed
-mkdir -p ~/.config/omarchy/plugins
-
-# 2. Symlink the plugin folder
-ln -s "/path/to/omaantigravity" ~/.config/omarchy/plugins/omaantigravity
-
-# 3. Enable in Omarchy status bar
-omarchy plugin enable omaantigravity --section right
-```
-
-Alternatively, you can add it directly to `~/.config/omarchy/shell.json` under `bar.layout.right`:
-
-```json
-{
-  "id": "omaantigravity",
-  "barMetric": "gemini",
-  "alertThresholdPct": 20,
-  "showPercentageInBar": true
-}
-```
-
-Omarchy will hot-reload automatically when the configuration is saved.
 
 ---
 
@@ -168,6 +136,18 @@ omarchy plugin disable omaantigravity
 # Remove plugin
 omarchy plugin remove omaantigravity
 ```
+
+---
+
+## Disclaimer
+
+All product names, logos, brands, trademarks, and registered trademarks mentioned in this project (including **Google**, **Google Antigravity**, **Gemini**, **Anthropic**, **Claude**, **OpenAI**, and **GPT**) are the property of their respective owners. 
+
+All company, product, and service names used in this software and documentation are for identification, reference, and interoperability purposes only. Use of these names, logos, and brands does not imply endorsement, affiliation, or sponsorship.
+
+<p align="center">
+  <img src="preview.png" alt="OmaAntigravity Preview" width="450" />
+</p>
 
 ---
 
