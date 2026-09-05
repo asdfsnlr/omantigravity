@@ -13,7 +13,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Antigravity",
+    "displayName": "Omantigravity",
     "description": "Monitor Antigravity CLI quota limits, 5-hour & weekly reset countdowns.",
     "category": "AI",
     "allowMultiple": false,
