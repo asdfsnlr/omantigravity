@@ -300,13 +300,13 @@ Panel {
           iconOpacity: 1.0
           iconComponent: Component {
             Item {
-              implicitWidth: Style.font.display * 1.25
-              implicitHeight: Style.font.display * 1.25
+              implicitWidth: Style.space(36)
+              implicitHeight: Style.space(36)
 
               Image {
                 anchors.centerIn: parent
-                width: Style.font.display * 1.15
-                height: Style.font.display * 1.15
+                width: Style.space(34)
+                height: Style.space(34)
                 source: root.hasAlerts ? "" : Qt.resolvedUrl("assets/antigravity.png")
                 fillMode: Image.PreserveAspectFit
                 smooth: true
@@ -318,7 +318,7 @@ Panel {
                 visible: root.hasAlerts
                 text: "󰀨"
                 color: root.urgent
-                font.pixelSize: Style.font.display
+                font.pixelSize: Style.space(28)
                 font.family: root.fontFamily
                 font.bold: true
               }
