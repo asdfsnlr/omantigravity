@@ -29,6 +29,23 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
 
 ---
 
+## Requirements
+
+Before using the plugin, ensure the following dependencies and tools are available on your system:
+
+- **Omarchy Linux**: Quickshell-powered desktop shell with third-party plugin support.
+- **Google Antigravity CLI (`agy`)**:
+  - The `agy` executable must be installed and accessible in your `PATH` (or standard paths such as `~/.local/share/mise/shims/agy`, `~/.gemini/antigravity-cli/bin/agy`, or `/usr/bin/agy`).
+  - You must have logged in / authenticated at least once so `agy` can query your usage limits.
+- **Python 3**:
+  - `python3` (3.8+) for running the background usage fetcher and cache engine (`scripts/fetch_usage.py`). Only uses Python standard library modules; no external `pip` dependencies are needed.
+- **Desktop Notifications** *(Optional)*:
+  - `libnotify` (`notify-send`) for system notification alerts when quota drops below your configured threshold.
+- **Nerd Font**:
+  - Any Nerd Font (e.g. `JetBrainsMono Nerd Font`, default in Omarchy) for iconography and status indicators.
+
+---
+
 ## Installation
 
 Add and enable the plugin directly in Omarchy using the official plugin manager:
