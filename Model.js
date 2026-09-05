@@ -1,4 +1,4 @@
-// OmaAntigravity Model.js
+// Omantigravity Model.js
 // Data helpers and formatting utilities for the Antigravity usage panel
 
 function parseData(raw) {

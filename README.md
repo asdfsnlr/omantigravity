@@ -1,11 +1,11 @@
-# OmaAntigravity — Antigravity CLI Usage & Quota Plugin for Omarchy
+# Omantigravity — Antigravity CLI Usage & Quota Plugin for Omarchy
 
 An Omarchy shell bar widget and popup panel plugin that monitors and displays **Google Antigravity CLI** (`agy`) limits, 5-hour rolling windows, weekly quotas, and active model status in real time.
 
 > **Disclaimer:** *This project is an unofficial community plugin for Omarchy. It is not developed by, endorsed by, affiliated with, or in any way officially connected to [Google LLC](https://google.com), [Anthropic PBC](https://anthropic.com), [OpenAI](https://openai.com), or their respective subsidiaries. All product names, logos, brands, trademarks, and registered trademarks (including Google, Google Antigravity, Gemini, Anthropic, Claude, OpenAI, and GPT) are the property of their respective owners and are used solely for identification, reference, and interoperability purposes.*
 
 <p align="center">
-  <img src="preview.png" alt="OmaAntigravity Preview" />
+  <img src="preview.png" alt="Omantigravity Preview" />
 </p>
 
 ## Benefits & Features
@@ -34,19 +34,19 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
 Add and enable the plugin directly in Omarchy using the official plugin manager:
 
 ```bash
-omarchy plugin add https://github.com/slanger/omaantigravity.git --enable
+omarchy plugin add https://github.com/slanger/omantigravity.git --enable
 ```
 
 If you wish to position it in a specific bar section (e.g. `right`):
 
 ```bash
-omarchy plugin enable omaantigravity --section right
+omarchy plugin enable omantigravity --section right
 ```
 
 To update the plugin to the latest version at any time:
 
 ```bash
-omarchy plugin update omaantigravity
+omarchy plugin update omantigravity
 ```
 
 ---
@@ -68,26 +68,26 @@ Settings can be toggled directly in the panel UI, configured via `omarchy bar se
 
 ```bash
 # Set metric to Gemini models (default)
-omarchy bar set omaantigravity barMetric gemini
+omarchy bar set omantigravity barMetric gemini
 
 # Set metric to Claude and GPT models
-omarchy bar set omaantigravity barMetric 3p
+omarchy bar set omantigravity barMetric 3p
 
 # Set metric to overall lowest remaining quota
-omarchy bar set omaantigravity barMetric lowest
+omarchy bar set omantigravity barMetric lowest
 
 # Pin to a specific window
-omarchy bar set omaantigravity barMetric gemini-5h
-omarchy bar set omaantigravity barMetric gemini-weekly
+omarchy bar set omantigravity barMetric gemini-5h
+omarchy bar set omantigravity barMetric gemini-weekly
 
 # Change the critical alert threshold (e.g. to 25%)
-omarchy bar set omaantigravity alertThresholdPct 25 --json
+omarchy bar set omantigravity alertThresholdPct 25 --json
 
 # Toggle desktop notifications
-omarchy bar set omaantigravity enableNotifications false --json
+omarchy bar set omantigravity enableNotifications false --json
 
 # Change poll interval (e.g. every 2 minutes)
-omarchy bar set omaantigravity pollIntervalSec 120 --json
+omarchy bar set omantigravity pollIntervalSec 120 --json
 ```
 
 ---
@@ -102,7 +102,7 @@ omarchy bar set omaantigravity pollIntervalSec 120 --json
 | **Pin Specific Limit** | Click any progress bar row in the panel |
 | **Set Alert Threshold** | Click `[10%]`, `[15%]`, `[20%]`, `[25%]`, or `[30%]` chips |
 | **Toggle Notifications** | Click `[󰂚 Notify]` / `[󰂛 Muted]` button |
-| **IPC Controls** | `omarchy-shell omaantigravity toggle`, `open`, `close`, `refresh`, `state` |
+| **IPC Controls** | `omarchy-shell omantigravity toggle`, `open`, `close`, `refresh`, `state` |
 
 ---
 
@@ -130,13 +130,13 @@ The backend query engine `scripts/fetch_usage.py` can also be run standalone:
 omarchy plugin list
 
 # Validate plugin manifest and schema
-omarchy plugin validate ~/.config/omarchy/plugins/omaantigravity
+omarchy plugin validate ~/.config/omarchy/plugins/omantigravity
 
 # Disable plugin from status bar
-omarchy plugin disable omaantigravity
+omarchy plugin disable omantigravity
 
 # Remove plugin
-omarchy plugin remove omaantigravity
+omarchy plugin remove omantigravity
 ```
 
 ---

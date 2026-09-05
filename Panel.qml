@@ -9,8 +9,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "omaantigravity"
-  ipcTarget: "omaantigravity"
+  moduleName: "omantigravity"
+  ipcTarget: "omantigravity"
   manageIpc: false
 
   // ── State Properties ────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ Panel {
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
       bar.shell.updateEntryInline(root.moduleName, { barMetric: metric })
     }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "barMetric", metric]
+    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "barMetric", metric]
     saveConfigProc.running = true
   }
 
@@ -76,7 +76,7 @@ Panel {
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
       bar.shell.updateEntryInline(root.moduleName, { alertThresholdPct: thresh })
     }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "alertThresholdPct", String(thresh), "--json"]
+    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "alertThresholdPct", String(thresh), "--json"]
     saveConfigProc.running = true
     checkAndNotify()
   }
@@ -89,7 +89,7 @@ Panel {
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
       bar.shell.updateEntryInline(root.moduleName, { enableNotifications: next })
     }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omaantigravity", "enableNotifications", next ? "true" : "false", "--json"]
+    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "enableNotifications", next ? "true" : "false", "--json"]
     saveConfigProc.running = true
     if (next) checkAndNotify()
   }
@@ -224,7 +224,7 @@ Panel {
 
   // ── IPC Handler ─────────────────────────────────────────────────────────────
   IpcHandler {
-    target: "omaantigravity"
+    target: "omantigravity"
 
     function refresh() { root.refresh(true) }
     function open() { root.open() }

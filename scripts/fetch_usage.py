@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fetch, parse, and cache Antigravity CLI usage limits and quota information.
-Designed for the Omarchy OmaAntigravity bar widget & panel plugin.
+Designed for the Omarchy Omantigravity bar widget & panel plugin.
 """
 
 from __future__ import annotations

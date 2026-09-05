@@ -1,1 +1,1 @@
-# OmaAntigravity scripts package
+# Omantigravity scripts package
