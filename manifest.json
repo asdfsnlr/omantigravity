@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "omantigravity",
+  "id": "asdfsnlr.omantigravity",
   "name": "Omantigravity",
   "version": "1.0.0",
-  "author": "Sebastian Langer",
+  "author": "asdfsnlr",
   "license": "MIT",
   "description": "Real-time Antigravity CLI quota limits, 5-hour and weekly window meters, and reset countdowns for Omarchy bar.",
   "kinds": [
