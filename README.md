@@ -1,90 +1,123 @@
 # OmaAntigravity — Antigravity CLI Usage & Quota Plugin for Omarchy
 
-An Omarchy shell bar widget and panel plugin that monitors and displays **Google Antigravity CLI** (`agy`) limits, 5-hour rolling windows, weekly quotas, and active model status in real time.
+An Omarchy shell bar widget and popup panel plugin that monitors and displays **Google Antigravity CLI** (`agy`) limits, 5-hour rolling windows, weekly quotas, and active model status in real time.
 
-## Benefits
+---
 
-- **At-a-Glance Quota in Your Bar**: See remaining quota directly in your status bar (`󰒋 73%`). Quota percentage adapts automatically or tracks the most limiting constraint.
-- **Model Group Breakdown**: Clean cards detailing each model family:
-  - **Gemini Models**: Gemini Flash, Gemini Pro
-  - **Claude and GPT models**: Claude Opus, Claude Sonnet, GPT-OSS
-- **5-Hour & Weekly Windows**: Clear progress meters for both the 5-hour burst smoothing window and the weekly tier quota.
-- **Reset Countdowns**: Real-time countdowns showing when limits refresh (e.g. `Resets in 4h 55m` or `Resets in 5d 19h`).
-- **Active Model Detection**: Displays current active model (e.g. `Gemini 3.8 Flash (Medium)`) and reasoning effort tier.
-- **Urgent & Warning Thresholds**: Dynamic color cues (normal foreground, warning yellow under 30%, urgent red under 15%).
-- **Instant Launch via Local Cache**: Loads immediately from cache without delay, refreshing fresh data in the background.
-- **Keyboard-First Controls**: Full keyboard shortcuts (`[R]` to force refresh, `[Esc]` to close).
+## Features & Benefits
+
+- **At-a-Glance Quota in Your Bar**: Real-time remaining quota displayed directly on your status bar (`λ 86%`). Automatically turns urgent red with an alert glyph (`󰀨`) when quota is low.
+- **Interactive Metric Selector**: Minimalist rectangular chips in the panel to select which metric the bar tracks:
+  - **Gemini**: Shows the most constrained limit for Gemini models (Flash, Pro).
+  - **Claude & GPT**: Shows the most constrained limit for third-party models (Opus, Sonnet, GPT-OSS).
+  - **Lowest**: Dynamically tracks the absolute lowest limit across all groups and windows.
+- **Pin Any Specific Limit**: Click any individual 5-hour or weekly progress bar in the panel to pin that exact limit to the status bar (indicated by a clean `󰄬 On bar` badge).
+- **Customizable Alert System**:
+  - Configurable alert threshold percentage (default: **20%** remaining).
+  - Prominent in-panel alert banner highlighting critical quotas and their exact reset countdown.
+  - Native desktop notifications via `notify-send` when limits drop to or below your threshold.
+  - In-panel quick selectors (`[10%]`, `[15%]`, `[20%]`, `[25%]`, `[30%]`) and a mute/unmute toggle (`[󰂚 Notify]` / `[󰂛 Muted]`).
+- **Antigravity Branding & Active Model**:
+  - Displays the official vibrant Antigravity arch logo with transparent background.
+  - Shows the currently selected model and reasoning effort tier (e.g. `Gemini 3.8 Flash · Reasoning: Medium`).
+- **Compact Non-Scroll Design**: Fully fitted layout tailored to Omarchy's design language (`Style.cornerRadius`, no scrollbars).
+- **Instant Launch via Local Cache**: Loads immediately from local cache (`~/.cache/omarchy/antigravity-usage.json`) without lag, refreshing fresh data in the background.
+- **Full Keyboard Navigation**: Press <kbd>R</kbd> in the panel to force refresh, <kbd>Esc</kbd> to close.
 
 ---
 
 ## Installation
 
-### 1. Symlink or copy to Omarchy plugins directory
+### Method 1: Standard Omarchy Plugin Installation (Recommended)
 
-For development or direct usage:
+Install directly from Git using Omarchy's built-in plugin manager:
 
 ```bash
-mkdir -p ~/.config/omarchy/plugins
-ln -s "/home/slanger/source/repos/omarchy-plugins/omaantigravity" ~/.config/omarchy/plugins/omaantigravity
+# Add and enable the plugin directly into your bar
+omarchy plugin add https://github.com/slanger/omaantigravity.git --enable
 ```
 
-### 2. Enable in Omarchy status bar
-
-Add the plugin to your desired section (e.g., `right`):
+If you wish to specify a particular bar section (e.g. `right`):
 
 ```bash
 omarchy plugin enable omaantigravity --section right
 ```
 
-Or edit `~/.config/omarchy/shell.json` directly under `bar.layout.right`:
+To update the plugin later:
+
+```bash
+omarchy plugin update omaantigravity
+```
+
+---
+
+### Method 2: Local / Development Symlink
+
+If you cloned or develop the repository locally:
+
+```bash
+# 1. Create plugins directory if needed
+mkdir -p ~/.config/omarchy/plugins
+
+# 2. Symlink the plugin folder
+ln -s "/path/to/omaantigravity" ~/.config/omarchy/plugins/omaantigravity
+
+# 3. Enable in Omarchy status bar
+omarchy plugin enable omaantigravity --section right
+```
+
+Alternatively, you can add it directly to `~/.config/omarchy/shell.json` under `bar.layout.right`:
 
 ```json
 {
   "id": "omaantigravity",
-  "showPercentageInBar": true,
-  "pollIntervalSec": 300,
-  "barMetric": "lowest"
+  "barMetric": "gemini",
+  "alertThresholdPct": 20,
+  "showPercentageInBar": true
 }
 ```
 
-Omarchy will hot-reload automatically on save.
+Omarchy will hot-reload automatically when the configuration is saved.
 
 ---
 
 ## Configuration Options
 
-Settings can be customized directly in the panel UI (clicking the group chips or any limit row), via `omarchy bar set`, or in `~/.config/omarchy/shell.json`:
+Settings can be toggled directly in the panel UI, configured via `omarchy bar set`, or specified in `~/.config/omarchy/shell.json`:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `pollIntervalSec` | integer | `300` | Background refresh interval in seconds (30s – 3600s) |
-| `showPercentageInBar` | boolean | `true` | Display remaining percentage next to the bar icon |
-| `barMetric` | enum | `"gemini"` | Quota group or limit to show in the bar: `gemini`, `3p`, `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
-| `barIcon` | string | `"λ"` | Icon glyph displayed on the bar |
-| `alertThresholdPct` | integer | `20` | Threshold percentage (5% – 50%) for critical low quota alerts |
+| `barMetric` | enum | `"gemini"` | Quota limit to show on the bar: `gemini`, `3p`, `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
+| `alertThresholdPct` | integer | `20` | Threshold percentage (5% – 50%) for low quota alerts |
 | `enableNotifications` | boolean | `true` | Send desktop notifications via `notify-send` when quota is critical |
+| `showPercentageInBar` | boolean | `true` | Display remaining percentage next to the bar icon |
+| `pollIntervalSec` | integer | `300` | Background refresh interval in seconds (30s – 3600s) |
+| `barIcon` | string | `"λ"` | Icon glyph displayed on the bar |
 
-### Configure via CLI
+### CLI Configuration Examples
 
 ```bash
-# Show Gemini's available limit (default)
+# Set metric to Gemini models (default)
 omarchy bar set omaantigravity barMetric gemini
 
-# Show Claude and GPT models available limit
+# Set metric to Claude and GPT models
 omarchy bar set omaantigravity barMetric 3p
 
-# Show the lowest remaining quota overall
+# Set metric to overall lowest remaining quota
 omarchy bar set omaantigravity barMetric lowest
 
-# Lock to a specific window
+# Pin to a specific window
 omarchy bar set omaantigravity barMetric gemini-5h
 omarchy bar set omaantigravity barMetric gemini-weekly
 
-# Change alert threshold (e.g. to 25%)
+# Change the critical alert threshold (e.g. to 25%)
 omarchy bar set omaantigravity alertThresholdPct 25 --json
 
 # Toggle desktop notifications
 omarchy bar set omaantigravity enableNotifications false --json
+
+# Change poll interval (e.g. every 2 minutes)
+omarchy bar set omaantigravity pollIntervalSec 120 --json
 ```
 
 ---
@@ -93,25 +126,47 @@ omarchy bar set omaantigravity enableNotifications false --json
 
 | Action | Shortcut / Trigger |
 | --- | --- |
-| **Open / Close Panel** | Click bar icon or <kbd>Esc</kbd> |
-| **Force Refresh** | Right-click / Middle-click bar button or press <kbd>r</kbd> / <kbd>R</kbd> in panel |
-| **IPC Controls** | `omarchy-shell omaantigravity refresh`, `open`, `close`, `toggle` |
+| **Open / Close Panel** | Left-click bar widget or press <kbd>Esc</kbd> |
+| **Force Fresh Refresh** | Right-click / Middle-click bar widget or press <kbd>R</kbd> inside panel |
+| **Switch Active Group** | Click `[Gemini]`, `[Claude & GPT]`, or `[Lowest]` chips |
+| **Pin Specific Limit** | Click any progress bar row in the panel |
+| **Set Alert Threshold** | Click `[10%]`, `[15%]`, `[20%]`, `[25%]`, or `[30%]` chips |
+| **Toggle Notifications** | Click `[󰂚 Notify]` / `[󰂛 Muted]` button |
+| **IPC Controls** | `omarchy-shell omaantigravity toggle`, `open`, `close`, `refresh`, `state` |
 
 ---
 
 ## CLI Script Usage
 
-The helper script `scripts/fetch_usage.py` can also be run directly from terminal:
+The backend query engine `scripts/fetch_usage.py` can also be run standalone:
 
 ```bash
-# Return cached data if fresh, or query agy
+# Return cached data if recent (<300s), otherwise fetch fresh from agy
 ./scripts/fetch_usage.py --cached
 
-# Force a real-time fetch from agy
+# Force a fresh real-time fetch from agy
 ./scripts/fetch_usage.py --force
 
-# Return current cache immediately
+# Return current cache immediately without waiting
 ./scripts/fetch_usage.py --cached-only
+```
+
+---
+
+## Plugin Management
+
+```bash
+# List all discovered plugins and their status
+omarchy plugin list
+
+# Validate plugin manifest and schema
+omarchy plugin validate ~/.config/omarchy/plugins/omaantigravity
+
+# Disable plugin from status bar
+omarchy plugin disable omaantigravity
+
+# Remove plugin
+omarchy plugin remove omaantigravity
 ```
 
 ---
