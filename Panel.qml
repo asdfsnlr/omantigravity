@@ -18,6 +18,7 @@ Panel {
   property bool loading: fetchProc.running
   property int dataVersion: 0
   property var notifiedAlerts: ({})
+  property var exactResetMap: ({})
 
   // ── Settings ────────────────────────────────────────────────────────────────
   property int pollIntervalSec: 300
@@ -57,40 +58,74 @@ Panel {
     enableNotifications = setting("enableNotifications", true)
   }
 
+  function isExactReset(bucketId) {
+    return !!exactResetMap[bucketId]
+  }
+
+  function toggleResetFormat(bucketId, toggleAll) {
+    var targetState = !isExactReset(bucketId)
+    var updated = Object.assign({}, exactResetMap)
+    if (toggleAll) {
+      if (root.usageData && root.usageData.groups) {
+        for (var i = 0; i < root.usageData.groups.length; i++) {
+          var grp = root.usageData.groups[i]
+          var buckets = grp.buckets || []
+          for (var j = 0; j < buckets.length; j++) {
+            updated[buckets[j].id] = targetState
+          }
+        }
+      }
+    } else {
+      updated[bucketId] = targetState
+    }
+    exactResetMap = updated
+  }
+
+  function persistSettings(values) {
+    var entry = { id: root.moduleName }
+    for (var existing in root.settings) {
+      if (existing !== "id") entry[existing] = root.settings[existing]
+    }
+    for (var key in values) {
+      entry[key] = values[key]
+    }
+
+    root.settings = entry
+    if (root.hostWidget && "settings" in root.hostWidget) {
+      root.hostWidget.settings = entry
+    }
+
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    } else {
+      // Fallback via CLI if not embedded in running omarchy-shell
+      for (var k in values) {
+        var val = values[k]
+        var isJson = (typeof val === "number" || typeof val === "boolean")
+        saveConfigProc.command = isJson
+          ? ["omarchy", "bar", "set", root.moduleName, k, String(val), "--json"]
+          : ["omarchy", "bar", "set", root.moduleName, k, String(val)]
+        saveConfigProc.running = true
+      }
+    }
+  }
+
   function setBarMetric(metric) {
     if (!metric) return
     root.barMetric = metric
-    var snap = Object.assign({}, root.settings, { barMetric: metric })
-    root.settings = snap
-    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline(root.moduleName, { barMetric: metric })
-    }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "barMetric", metric]
-    saveConfigProc.running = true
+    persistSettings({ barMetric: metric })
   }
 
   function setAlertThreshold(thresh) {
     root.alertThresholdPct = thresh
-    var snap = Object.assign({}, root.settings, { alertThresholdPct: thresh })
-    root.settings = snap
-    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline(root.moduleName, { alertThresholdPct: thresh })
-    }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "alertThresholdPct", String(thresh), "--json"]
-    saveConfigProc.running = true
+    persistSettings({ alertThresholdPct: thresh })
     checkAndNotify()
   }
 
   function toggleNotifications() {
     var next = !root.enableNotifications
     root.enableNotifications = next
-    var snap = Object.assign({}, root.settings, { enableNotifications: next })
-    root.settings = snap
-    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline(root.moduleName, { enableNotifications: next })
-    }
-    saveConfigProc.command = ["omarchy", "bar", "set", "omantigravity", "enableNotifications", next ? "true" : "false", "--json"]
-    saveConfigProc.running = true
+    persistSettings({ enableNotifications: next })
     if (next) checkAndNotify()
   }
 
@@ -314,12 +349,25 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
 
               Button {
-                text: root.loading ? "Updating..." : "Refresh"
+                iconText: root.enableNotifications ? "󰂚" : "󰂛"
+                tooltipText: root.enableNotifications ? "Notifications enabled (click to mute)" : "Notifications muted (click to enable)"
+                foreground: root.enableNotifications ? root.fg : root.dim
+                fontFamily: root.fontFamily
+                iconSize: Style.font.icon
+                horizontalPadding: Style.space(6)
+                verticalPadding: Style.space(4)
+                onClicked: root.toggleNotifications()
+              }
+
+              Button {
+                iconText: "󰑐"
+                iconSpinning: root.loading
+                tooltipText: root.loading ? "Updating..." : "Refresh"
                 foreground: root.fg
                 fontFamily: root.fontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.spacing.controlPaddingX
-                verticalPadding: Style.spacing.controlPaddingY
+                iconSize: Style.font.icon
+                horizontalPadding: Style.space(6)
+                verticalPadding: Style.space(4)
                 onClicked: root.refresh(true)
               }
             }
@@ -502,44 +550,6 @@ Panel {
           }
 
           Item { Layout.fillWidth: true }
-
-          // Desktop notification toggle button
-          Rectangle {
-            height: Style.space(24)
-            implicitWidth: notifRow.implicitWidth + Style.space(12)
-            radius: Style.cornerRadius
-            color: root.enableNotifications ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.04)
-            border.width: 1
-            border.color: root.enableNotifications ? root.fg : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
-
-            RowLayout {
-              id: notifRow
-              anchors.centerIn: parent
-              spacing: Style.space(4)
-
-              Text {
-                text: root.enableNotifications ? "󰂚" : "󰂛"
-                color: root.enableNotifications ? root.fg : root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-
-              Text {
-                text: root.enableNotifications ? "Notify" : "Muted"
-                color: root.enableNotifications ? root.fg : root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.bold: root.enableNotifications
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              hoverEnabled: true
-              onClicked: root.toggleNotifications()
-            }
-          }
         }
 
         // ── Error View ─────────────────────────────────────────────────────
@@ -669,8 +679,16 @@ Panel {
                   Layout.fillWidth: true
                   implicitHeight: bucketCol.implicitHeight + Style.space(6)
 
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onClicked: root.setBarMetric(modelData.id)
+                  }
+
                   ColumnLayout {
                     id: bucketCol
+                    z: 1
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
@@ -711,22 +729,63 @@ Panel {
 
                       Item { Layout.fillWidth: true }
 
-                      RowLayout {
-                        spacing: Style.space(2)
-                        visible: modelData.reset_countdown !== ""
+                      // Interactive time pill - click to toggle between remaining time and exact reset date
+                      Rectangle {
+                        id: timeChip
+                        z: 2
+                        readonly property bool isExact: root.isExactReset(modelData.id)
+                        readonly property string displayText: Model.formatResetDisplay(modelData, isExact)
+                        visible: displayText !== ""
+                        Layout.alignment: Qt.AlignVCenter
+                        height: Style.space(20)
+                        implicitHeight: Style.space(20)
+                        implicitWidth: timeRow.implicitWidth + Style.space(10)
+                        radius: Style.cornerRadius
+                        color: timeMouse.containsMouse 
+                          ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
+                          : (isExact ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08) : "transparent")
+                        border.width: 1
+                        border.color: isExact 
+                          ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.28) 
+                          : (timeMouse.containsMouse ? Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.18) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08))
 
-                        Text {
-                          text: "󰅐"
-                          color: root.dim
-                          font.family: root.fontFamily
-                          font.pixelSize: Style.font.caption
+                        RowLayout {
+                          id: timeRow
+                          anchors.centerIn: parent
+                          spacing: Style.space(3)
+
+                          Text {
+                            text: timeChip.isExact ? "󰸗" : "󰅐"
+                            color: timeChip.isExact ? root.fg : root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                          }
+
+                          Text {
+                            text: timeChip.displayText
+                            color: timeChip.isExact ? root.fg : root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            font.bold: timeChip.isExact
+                          }
                         }
 
-                        Text {
-                          text: modelData.reset_countdown
-                          color: root.dim
-                          font.family: root.fontFamily
-                          font.pixelSize: Style.font.caption
+                        MouseArea {
+                          id: timeMouse
+                          anchors.fill: parent
+                          cursorShape: Qt.PointingHandCursor
+                          hoverEnabled: true
+                          acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                          onClicked: function(mouse) {
+                            mouse.accepted = true
+                            var toggleAll = (mouse.button === Qt.MiddleButton) || (mouse.modifiers & Qt.ShiftModifier)
+                            root.toggleResetFormat(modelData.id, toggleAll)
+                          }
+                        }
+
+                        PanelToolTip {
+                          visible: timeMouse.containsMouse
+                          text: timeChip.isExact ? "Exact reset date (click to show countdown)" : "Remaining time (click to show exact date)"
                         }
                       }
 
@@ -765,13 +824,6 @@ Panel {
                         }
                       }
                     }
-                  }
-
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    hoverEnabled: true
-                    onClicked: root.setBarMetric(modelData.id)
                   }
                 }
               }

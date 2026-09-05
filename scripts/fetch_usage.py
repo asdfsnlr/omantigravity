@@ -100,6 +100,21 @@ def format_local_time(iso_str: str) -> str:
         return iso_str
 
 
+def format_exact_time(iso_str: str) -> str:
+    if not iso_str:
+        return ""
+    try:
+        clean_iso = iso_str.replace("Z", "+00:00")
+        target_dt = datetime.fromisoformat(clean_iso)
+        local_dt = target_dt.astimezone()
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        month_abbr = months[local_dt.month - 1]
+        time_part = local_dt.strftime("%H:%M")
+        return f"{local_dt.day}, {month_abbr} at {time_part}"
+    except Exception:
+        return ""
+
+
 def parse_usage_data(
     usage_raw: Dict[str, Any],
     model_raw: Optional[Dict[str, Any]] = None
@@ -138,6 +153,7 @@ def parse_usage_data(
             reset_time = b.get("reset_time", "")
             countdown = format_countdown(reset_time)
             local_reset = format_local_time(reset_time)
+            exact_reset = format_exact_time(reset_time)
 
             if rem_pct < lowest_pct:
                 lowest_pct = rem_pct
@@ -159,6 +175,7 @@ def parse_usage_data(
                 "reset_time": reset_time,
                 "reset_countdown": countdown,
                 "reset_local": local_reset,
+                "reset_exact": exact_reset,
                 "alarming": rem_pct <= 15,
                 "warning": 15 < rem_pct <= 30,
             }

@@ -147,3 +147,36 @@ function metricLabel(key) {
   if (key === "3p-weekly") return "Claude/GPT (Weekly)"
   return key
 }
+
+function formatExactDate(isoStr) {
+  if (!isoStr) return ""
+  try {
+    var d = new Date(isoStr)
+    if (isNaN(d.getTime())) return ""
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    var day = d.getDate()
+    var month = months[d.getMonth()]
+    var hrs = d.getHours()
+    var mins = d.getMinutes()
+    var hrsStr = hrs < 10 ? "0" + hrs : String(hrs)
+    var minsStr = mins < 10 ? "0" + mins : String(mins)
+    return day + ", " + month + " at " + hrsStr + ":" + minsStr
+  } catch (e) {
+    return ""
+  }
+}
+
+function formatResetDisplay(bucket, isExact) {
+  if (!bucket) return ""
+  if (!isExact) {
+    return bucket.reset_countdown || ""
+  }
+  if (bucket.reset_exact) {
+    return bucket.reset_exact
+  }
+  if (bucket.reset_time) {
+    var formatted = formatExactDate(bucket.reset_time)
+    if (formatted) return formatted
+  }
+  return bucket.reset_local || bucket.reset_countdown || ""
+}
