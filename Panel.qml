@@ -299,29 +299,13 @@ Panel {
           fontFamily: root.fontFamily
           iconOpacity: 1.0
           iconComponent: Component {
-            Item {
-              implicitWidth: Style.space(36)
-              implicitHeight: Style.space(36)
-
-              Image {
-                anchors.centerIn: parent
-                width: Style.space(34)
-                height: Style.space(34)
-                source: root.hasAlerts ? "" : Qt.resolvedUrl("assets/antigravity.png")
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                visible: !root.hasAlerts
-              }
-
-              Text {
-                anchors.centerIn: parent
-                visible: root.hasAlerts
-                text: "󰀨"
-                color: root.urgent
-                font.pixelSize: Style.space(28)
-                font.family: root.fontFamily
-                font.bold: true
-              }
+            Text {
+              anchors.centerIn: parent
+              text: root.hasAlerts ? "󰀨" : root.barIcon
+              color: root.hasAlerts ? root.urgent : root.fg
+              font.pixelSize: Style.font.display
+              font.family: root.fontFamily
+              font.bold: true
             }
           }
           trailingControl: Component {

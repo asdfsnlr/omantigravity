@@ -22,8 +22,7 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
   - Native desktop notifications via `notify-send` when limits drop to or below your threshold.
   - In-panel quick selectors (`[10%]`, `[15%]`, `[20%]`, `[25%]`, `[30%]`) and a mute/unmute toggle (`[󰂚 Notify]` / `[󰂛 Muted]`).
 - **Antigravity Branding & Active Model**:
-  - Displays the official vibrant Antigravity arch logo with transparent background.
-  - Shows the currently selected model and reasoning effort tier (e.g. `Gemini 3.8 Flash · Reasoning: Medium`).
+  - Displays the clean Lambda (`λ`) glyph, current active model, and reasoning effort tier (e.g. `Gemini 3.8 Flash · Reasoning: Medium`).
 - **Compact Non-Scroll Design**: Fully fitted layout tailored to Omarchy's design language (`Style.cornerRadius`, no scrollbars).
 - **Instant Launch via Local Cache**: Loads immediately from local cache (`~/.cache/omarchy/antigravity-usage.json`) without lag, refreshing fresh data in the background.
 - **Full Keyboard Navigation**: Press <kbd>R</kbd> in the panel to force refresh, <kbd>Esc</kbd> to close.
