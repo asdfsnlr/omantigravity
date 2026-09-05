@@ -2,9 +2,13 @@
 
 An Omarchy shell bar widget and popup panel plugin that monitors and displays **Google Antigravity CLI** (`agy`) limits, 5-hour rolling windows, weekly quotas, and active model status in real time.
 
----
+> **Disclaimer:** *This project is an unofficial community plugin for Omarchy. It is not developed by, endorsed by, affiliated with, or in any way officially connected to [Google LLC](https://google.com), [Anthropic PBC](https://anthropic.com), [OpenAI](https://openai.com), or their respective subsidiaries. All product names, logos, brands, trademarks, and registered trademarks (including Google, Google Antigravity, Gemini, Anthropic, Claude, OpenAI, and GPT) are the property of their respective owners and are used solely for identification, reference, and interoperability purposes.*
 
-## Features & Benefits
+<p align="center">
+  <img src="preview.png" alt="OmaAntigravity Preview" />
+</p>
+
+## Benefits & Features
 
 - **At-a-Glance Quota in Your Bar**: Real-time remaining quota displayed directly on your status bar (`λ 86%`). Automatically turns urgent red with an alert glyph (`󰀨`) when quota is low.
 - **Interactive Metric Selector**: Minimalist rectangular chips in the panel to select which metric the bar tracks:
@@ -28,10 +32,9 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
 
 ## Installation
 
-Install directly using Omarchy's official plugin manager:
+Add and enable the plugin directly in Omarchy using the official plugin manager:
 
 ```bash
-# Add and enable the plugin in your Omarchy status bar
 omarchy plugin add https://github.com/slanger/omaantigravity.git --enable
 ```
 
@@ -136,18 +139,6 @@ omarchy plugin disable omaantigravity
 # Remove plugin
 omarchy plugin remove omaantigravity
 ```
-
----
-
-## Disclaimer
-
-All product names, logos, brands, trademarks, and registered trademarks mentioned in this project (including **Google**, **Google Antigravity**, **Gemini**, **Anthropic**, **Claude**, **OpenAI**, and **GPT**) are the property of their respective owners. 
-
-All company, product, and service names used in this software and documentation are for identification, reference, and interoperability purposes only. Use of these names, logos, and brands does not imply endorsement, affiliation, or sponsorship.
-
-<p align="center">
-  <img src="preview.png" alt="OmaAntigravity Preview" width="450" />
-</p>
 
 ---
 
