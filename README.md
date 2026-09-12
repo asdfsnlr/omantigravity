@@ -20,12 +20,12 @@ An Omarchy shell bar widget and popup panel plugin that monitors and displays **
   - Configurable alert threshold percentage (default: **20%** remaining).
   - Prominent in-panel alert banner highlighting critical quotas and their exact reset countdown.
   - Native desktop notifications via `notify-send` when limits drop to or below your threshold.
-  - In-panel quick selectors (`[10%]`, `[15%]`, `[20%]`, `[25%]`, `[30%]`) and a mute/unmute toggle (`[󰂚 Notify]` / `[󰂛 Muted]`).
+  - In-panel quick selectors (`[10%]`, `[15%]`, `[20%]`, `[25%]`, `[30%]`) to set your threshold. Toggle notifications on/off entirely via the `enableNotifications` setting.
 - **Antigravity Branding & Active Model**:
   - Displays the clean Lambda (`λ`) glyph, current active model, and reasoning effort tier (e.g. `Gemini 3.8 Flash · Reasoning: Medium`).
 - **Compact Non-Scroll Design**: Fully fitted layout tailored to Omarchy's design language (`Style.cornerRadius`, no scrollbars).
 - **Instant Launch via Local Cache**: Loads immediately from local cache (`~/.cache/omarchy/antigravity-usage.json`) without lag, refreshing fresh data in the background.
-- **Full Keyboard Navigation**: Press <kbd>R</kbd> in the panel to force refresh, <kbd>Esc</kbd> to close.
+- **Automatic Background Refresh**: Quota data refreshes on its own on a configurable interval (`pollIntervalSec`, default 300s) and whenever you open the panel — no manual refresh needed. Press <kbd>Esc</kbd> to close the panel.
 
 ---
 
@@ -77,7 +77,7 @@ Find the full path to your `agy` binary (e.g. `which agy` or `readlink -f "$(whi
 then set it once via the `agyPath` setting:
 
 ```bash
-omarchy bar set omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
+omarchy bar set asdfsnlr.omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
 ```
 
 You can also set it from the panel's settings form, wherever Omarchy exposes per-widget
@@ -103,29 +103,29 @@ Settings can be toggled directly in the panel UI, configured via `omarchy bar se
 
 ```bash
 # Point the plugin at your agy binary (required, see above)
-omarchy bar set omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
+omarchy bar set asdfsnlr.omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
 
 # Set metric to Gemini models (default)
-omarchy bar set omantigravity barMetric gemini
+omarchy bar set asdfsnlr.omantigravity barMetric gemini
 
 # Set metric to Claude and GPT models
-omarchy bar set omantigravity barMetric 3p
+omarchy bar set asdfsnlr.omantigravity barMetric 3p
 
 # Set metric to overall lowest remaining quota
-omarchy bar set omantigravity barMetric lowest
+omarchy bar set asdfsnlr.omantigravity barMetric lowest
 
 # Pin to a specific window
-omarchy bar set omantigravity barMetric gemini-5h
-omarchy bar set omantigravity barMetric gemini-weekly
+omarchy bar set asdfsnlr.omantigravity barMetric gemini-5h
+omarchy bar set asdfsnlr.omantigravity barMetric gemini-weekly
 
 # Change the critical alert threshold (e.g. to 25%)
-omarchy bar set omantigravity alertThresholdPct 25 --json
+omarchy bar set asdfsnlr.omantigravity alertThresholdPct 25 --json
 
 # Toggle desktop notifications
-omarchy bar set omantigravity enableNotifications false --json
+omarchy bar set asdfsnlr.omantigravity enableNotifications false --json
 
 # Change poll interval (e.g. every 2 minutes)
-omarchy bar set omantigravity pollIntervalSec 120 --json
+omarchy bar set asdfsnlr.omantigravity pollIntervalSec 120 --json
 ```
 
 ---
@@ -135,11 +135,10 @@ omarchy bar set omantigravity pollIntervalSec 120 --json
 | Action | Shortcut / Trigger |
 | --- | --- |
 | **Open / Close Panel** | Left-click bar widget or press <kbd>Esc</kbd> |
-| **Force Fresh Refresh** | Right-click / Middle-click bar widget or press <kbd>R</kbd> inside panel |
+| **Force Fresh Refresh** | Right-click / Middle-click bar widget |
 | **Switch Active Group** | Click `[Gemini]`, `[Claude & GPT]`, or `[Lowest]` chips |
 | **Pin Specific Limit** | Click any progress bar row in the panel |
 | **Set Alert Threshold** | Click `[10%]`, `[15%]`, `[20%]`, `[25%]`, or `[30%]` chips |
-| **Toggle Notifications** | Click `[󰂚 Notify]` / `[󰂛 Muted]` button |
 | **IPC Controls** | `omarchy-shell omantigravity toggle`, `open`, `close`, `refresh`, `state` |
 
 ---
