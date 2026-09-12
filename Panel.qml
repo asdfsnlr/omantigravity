@@ -43,6 +43,33 @@ Panel {
   readonly property color track: Style.selectedFillFor(fg, Color.accent)
   readonly property string fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
+  // ── Trusted Child Process Paths & Environments ─────────────────────────────
+  // Every process this widget launches uses a fixed, root-owned absolute
+  // path (never a bare command name resolved through the ambient PATH) and
+  // runs with clearEnvironment: true plus only the specific session-identity
+  // variables it actually needs -- never the full inherited environment,
+  // and never a PATH built from user-writable directories.
+  readonly property string python3Bin: "/usr/bin/python3"
+  readonly property string notifySendBin: "/usr/bin/notify-send"
+  readonly property string omarchyBin: "/usr/bin/omarchy"
+  // A minimal PATH for the omarchy CLI, which shells out internally to
+  // sibling system tools by bare name -- restricted to root-owned,
+  // non-user-writable directories only.
+  readonly property string trustedSystemPath: "/usr/share/omarchy/bin:/usr/local/sbin:/usr/local/bin:/usr/bin"
+  readonly property var sessionEnv: ({
+    "HOME": Quickshell.env("HOME") || "",
+    "XDG_RUNTIME_DIR": Quickshell.env("XDG_RUNTIME_DIR") || "",
+    "WAYLAND_DISPLAY": Quickshell.env("WAYLAND_DISPLAY") || "",
+    "DBUS_SESSION_BUS_ADDRESS": Quickshell.env("DBUS_SESSION_BUS_ADDRESS") || ""
+  })
+  readonly property var pythonEnv: ({ "HOME": root.sessionEnv.HOME })
+  readonly property var notifyEnv: root.sessionEnv
+  readonly property var omarchyEnv: Object.assign({}, root.sessionEnv, {
+    "OMARCHY_PATH": Quickshell.env("OMARCHY_PATH") || "",
+    "USER": Quickshell.env("USER") || "",
+    "PATH": root.trustedSystemPath
+  })
+
   // ── Helpers & Actions ───────────────────────────────────────────────────────
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -105,8 +132,8 @@ Panel {
         var val = values[k]
         var isJson = (typeof val === "number" || typeof val === "boolean")
         saveConfigProc.command = isJson
-          ? ["omarchy", "bar", "set", root.moduleName, k, String(val), "--json"]
-          : ["omarchy", "bar", "set", root.moduleName, k, String(val)]
+          ? [root.omarchyBin, "bar", "set", root.moduleName, k, String(val), "--json"]
+          : [root.omarchyBin, "bar", "set", root.moduleName, k, String(val)]
         saveConfigProc.running = true
       }
     }
@@ -154,7 +181,7 @@ Panel {
       if (!updated[key]) {
         updated[key] = true
         notifyProc.command = [
-          "notify-send",
+          root.notifySendBin,
           "-a", "Antigravity",
           "-u", "critical",
           "-i", "dialog-warning",
@@ -177,7 +204,7 @@ Panel {
   function refresh(force) {
     if (fetchProc.running) return
     var scriptPath = pathFromUrl(Qt.resolvedUrl("scripts/fetch_usage.py"))
-    var args = ["python3", scriptPath]
+    var args = [root.python3Bin, scriptPath]
     if (force) args.push("--force")
     else args.push("--cached")
     if (root.agyPath.length > 0) args.push("--agy-path", root.agyPath)
@@ -187,7 +214,7 @@ Panel {
 
   function loadInitialCache() {
     var scriptPath = pathFromUrl(Qt.resolvedUrl("scripts/fetch_usage.py"))
-    cacheProc.command = ["python3", scriptPath, "--cached-only"]
+    cacheProc.command = [root.python3Bin, scriptPath, "--cached-only"]
     cacheProc.running = true
   }
 
@@ -226,6 +253,8 @@ Panel {
   // ── Processes ───────────────────────────────────────────────────────────────
   Process {
     id: cacheProc
+    clearEnvironment: true
+    environment: root.pythonEnv
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -244,6 +273,8 @@ Panel {
 
   Process {
     id: fetchProc
+    clearEnvironment: true
+    environment: root.pythonEnv
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -259,10 +290,14 @@ Panel {
 
   Process {
     id: saveConfigProc
+    clearEnvironment: true
+    environment: root.omarchyEnv
   }
 
   Process {
     id: notifyProc
+    clearEnvironment: true
+    environment: root.notifyEnv
   }
 
   // ── Background Polling Timer ────────────────────────────────────────────────
