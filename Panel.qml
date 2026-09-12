@@ -151,13 +151,6 @@ Panel {
     checkAndNotify()
   }
 
-  function toggleNotifications() {
-    var next = !root.enableNotifications
-    root.enableNotifications = next
-    persistSettings({ enableNotifications: next })
-    if (next) checkAndNotify()
-  }
-
   function checkAndNotify() {
     // Drop any previously-notified bucket that has since recovered above the
     // threshold (e.g. a 5h window reset), so the next time it drops back
@@ -355,9 +348,6 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       onCloseRequested: root.close()
-      onTextKey: function(t) {
-        if (t === "r" || t === "R") root.refresh(true)
-      }
 
       ColumnLayout {
         id: contentColumn
@@ -393,35 +383,6 @@ Panel {
               font.pixelSize: Style.font.display
               font.family: root.fontFamily
               font.bold: true
-            }
-          }
-          trailingControl: Component {
-            RowLayout {
-              spacing: Style.space(6)
-              anchors.verticalCenter: parent.verticalCenter
-
-              Button {
-                iconText: root.enableNotifications ? "󰂚" : "󰂛"
-                tooltipText: root.enableNotifications ? "Notifications enabled (click to mute)" : "Notifications muted (click to enable)"
-                foreground: root.enableNotifications ? root.fg : root.dim
-                fontFamily: root.fontFamily
-                iconSize: Style.font.icon
-                horizontalPadding: Style.space(6)
-                verticalPadding: Style.space(4)
-                onClicked: root.toggleNotifications()
-              }
-
-              Button {
-                iconText: "󰑐"
-                iconSpinning: root.loading
-                tooltipText: root.loading ? "Updating..." : "Refresh"
-                foreground: root.fg
-                fontFamily: root.fontFamily
-                iconSize: Style.font.icon
-                horizontalPadding: Style.space(6)
-                verticalPadding: Style.space(4)
-                onClicked: root.refresh(true)
-              }
             }
           }
         }
@@ -890,7 +851,7 @@ Panel {
           Layout.bottomMargin: Style.space(4)
 
           Text {
-            text: "[R] Refresh · [Esc] Close"
+            text: "[Esc] Close"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
