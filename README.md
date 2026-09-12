@@ -51,19 +51,19 @@ Before using the plugin, ensure the following dependencies and tools are availab
 Add and enable the plugin directly in Omarchy using the official plugin manager:
 
 ```bash
-omarchy plugin add https://github.com/slanger/omantigravity.git --enable
+omarchy plugin add https://github.com/asdfsnlr/omantigravity.git --enable
 ```
 
 If you wish to position it in a specific bar section (e.g. `right`):
 
 ```bash
-omarchy plugin enable omantigravity --section right
+omarchy plugin enable asdfsnlr.omantigravity --section right
 ```
 
 To update the plugin to the latest version at any time:
 
 ```bash
-omarchy plugin update omantigravity
+omarchy plugin update asdfsnlr.omantigravity
 ```
 
 ---
@@ -147,13 +147,13 @@ The backend query engine `scripts/fetch_usage.py` can also be run standalone:
 omarchy plugin list
 
 # Validate plugin manifest and schema
-omarchy plugin validate ~/.config/omarchy/plugins/omantigravity
+omarchy plugin validate ~/.config/omarchy/plugins/asdfsnlr.omantigravity
 
 # Disable plugin from status bar
-omarchy plugin disable omantigravity
+omarchy plugin disable asdfsnlr.omantigravity
 
 # Remove plugin
-omarchy plugin remove omantigravity
+omarchy plugin remove asdfsnlr.omantigravity
 ```
 
 ---

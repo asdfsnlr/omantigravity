@@ -59,6 +59,28 @@ function getMetricValue(data, metricKey) {
     return "--"
   }
 
+  // Composite window-specific keys from the manifest schema (e.g. "gemini-5h",
+  // "3p-weekly"): match a group by family (gemini vs. claude/gpt) and a
+  // bucket within it by window, rather than by id (buckets never carry these
+  // synthetic ids, so the generic id/window loop below could never find them).
+  if (key === "gemini-5h" || key === "gemini-weekly" || key === "3p-5h" || key === "3p-weekly") {
+    var wantsGemini = key.indexOf("gemini") === 0
+    var wantsWindow = key.slice(key.lastIndexOf("-") + 1)
+    for (var i = 0; i < data.groups.length; i++) {
+      var grp = data.groups[i]
+      var grpIsGemini = !!(grp.is_gemini || (grp.name && grp.name.toLowerCase().indexOf("gemini") !== -1))
+      var grpIs3p = !grpIsGemini && grp.name && (grp.name.toLowerCase().indexOf("claude") !== -1 || grp.name.toLowerCase().indexOf("gpt") !== -1)
+      if (wantsGemini ? !grpIsGemini : !grpIs3p) continue
+      var buckets = grp.buckets || []
+      for (var j = 0; j < buckets.length; j++) {
+        if (buckets[j].window === wantsWindow) {
+          return buckets[j].remaining_pct !== undefined ? buckets[j].remaining_pct : 100
+        }
+      }
+    }
+    return "--"
+  }
+
   for (var i = 0; i < data.groups.length; i++) {
     var grp = data.groups[i]
     var buckets = grp.buckets || []

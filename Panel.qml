@@ -130,6 +130,20 @@ Panel {
   }
 
   function checkAndNotify() {
+    // Drop any previously-notified bucket that has since recovered above the
+    // threshold (e.g. a 5h window reset), so the next time it drops back
+    // below the threshold it notifies again instead of staying silenced for
+    // the rest of the session.
+    var activeKeys = {}
+    for (var i = 0; i < root.activeAlerts.length; i++) {
+      activeKeys[root.activeAlerts[i].id + "_" + root.alertThresholdPct] = true
+    }
+    var pruned = {}
+    for (var existingKey in root.notifiedAlerts) {
+      if (activeKeys[existingKey]) pruned[existingKey] = true
+    }
+    root.notifiedAlerts = pruned
+
     if (!root.enableNotifications || !root.hasAlerts) return
     var updated = Object.assign({}, root.notifiedAlerts)
     for (var i = 0; i < root.activeAlerts.length; i++) {
