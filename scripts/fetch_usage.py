@@ -12,15 +12,15 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import secrets
 import selectors
 import shutil
 import signal
 import stat
 import subprocess
 import sys
-import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Hard cap on combined stdout/stderr read from the `agy` CLI, to bound memory
 # use if the process is hostile or wedged and keeps producing output.
@@ -30,9 +30,14 @@ MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MiB
 # never-ending cache file (e.g. a FIFO) can't exhaust the helper's memory.
 CACHE_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
 
+CACHE_FILENAME = "antigravity-usage.json"
+
 # Only binaries resolving (after following symlinks) into one of these
 # directories are trusted to run as `agy`. This intentionally excludes the
 # rest of PATH, since an arbitrary PATH entry may be user- or world-writable.
+# This allowlist alone is *not* the security boundary -- see
+# _open_verified_chain() below, which re-walks and re-checks every directory
+# component on its own file descriptors before anything is executed.
 _TRUSTED_AGY_DIRS = [
     Path.home() / ".local/share/mise/installs/antigravity-cli",
     Path.home() / ".local/share/mise/shims",
@@ -43,20 +48,6 @@ _TRUSTED_AGY_DIRS = [
 ]
 
 
-def get_cache_dir() -> Path:
-    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omarchy"
-    cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        os.chmod(cache_dir, 0o700)
-    except OSError:
-        pass
-    return cache_dir
-
-
-def get_cache_path() -> Path:
-    return get_cache_dir() / "antigravity-usage.json"
-
-
 def _is_within(path: Path, parent: Path) -> bool:
     try:
         path.relative_to(parent)
@@ -65,44 +56,97 @@ def _is_within(path: Path, parent: Path) -> bool:
         return False
 
 
-def _verify_trusted_binary(candidate: Path) -> Optional[str]:
-    """Resolve `candidate` and verify it is safe to execute as `agy`.
+def _owner_and_mode_ok(st: os.stat_result, *, writable_check: int) -> bool:
+    return st.st_uid in (0, os.getuid()) and not (st.st_mode & writable_check)
 
-    Requires: resolves to a real regular file, owned by root or the current
-    user, not group/other writable, executable, and located inside one of
-    the fixed trusted install directories (never an arbitrary PATH entry).
+
+def _open_verified_chain(resolved: Path, want_dir: bool) -> Optional[int]:
+    """Open `resolved` (an already symlink-free absolute path) by walking it
+    component by component with `openat(..., O_NOFOLLOW)`, verifying on each
+    open file descriptor -- never by re-stating a pathname -- that every
+    ancestor directory and the final target are owned by root or the current
+    user and are not group/other-writable.
+
+    Because each hop is opened relative to the fd of its verified parent and
+    the final fd is what gets returned (and later executed/opened), there is
+    no window between "check" and "use" where a path string could be
+    re-resolved through a swapped component: fails closed on any mismatch,
+    symlink, or ownership/permission problem anywhere in the chain.
+    """
+    parts = resolved.parts[1:]
+    if not parts:
+        return None
+
+    fd = os.open("/", os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for i, part in enumerate(parts):
+            is_last = i == len(parts) - 1
+            flags = os.O_NOFOLLOW | os.O_CLOEXEC
+            flags |= os.O_DIRECTORY if not is_last or want_dir else os.O_RDONLY
+            try:
+                next_fd = os.open(part, flags, dir_fd=fd)
+            except OSError:
+                return None
+            os.close(fd)
+            fd = next_fd
+
+            st = os.fstat(fd)
+            if is_last:
+                expect_type = stat.S_ISDIR if want_dir else stat.S_ISREG
+                if not expect_type(st.st_mode):
+                    return None
+                if not _owner_and_mode_ok(st, writable_check=stat.S_IWGRP | stat.S_IWOTH):
+                    return None
+                if not want_dir and not (st.st_mode & stat.S_IXUSR):
+                    return None
+            else:
+                if not stat.S_ISDIR(st.st_mode):
+                    return None
+                if not _owner_and_mode_ok(st, writable_check=stat.S_IWGRP | stat.S_IWOTH):
+                    return None
+        return fd
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return None
+
+
+def _verify_trusted_binary(candidate: Path) -> Optional[int]:
+    """Resolve `candidate` and, if it is safe to execute as `agy`, return an
+    already-open, fully-verified read-only file descriptor for it.
+
+    The candidate must resolve inside one of the fixed trusted install
+    directories (policy allowlist), and every component of that resolved
+    path -- including all ancestor directories -- must independently pass
+    `_open_verified_chain()`'s fd-based ownership/permission checks. The
+    returned fd is the exact file that gets executed later, so there is no
+    later re-open-by-path step for an attacker to race.
     """
     try:
         resolved = candidate.resolve(strict=True)
     except (OSError, RuntimeError):
         return None
 
-    try:
-        st = resolved.stat()
-    except OSError:
-        return None
-
-    if not stat.S_ISREG(st.st_mode):
-        return None
-    if st.st_uid not in (0, os.getuid()):
-        return None
-    if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        return None
-    if not os.access(resolved, os.X_OK):
-        return None
-
+    trusted = False
     for trusted_dir in _TRUSTED_AGY_DIRS:
         try:
             resolved_dir = trusted_dir.resolve(strict=True)
         except (OSError, RuntimeError):
             continue
         if _is_within(resolved, resolved_dir):
-            return str(resolved)
+            trusted = True
+            break
+    if not trusted:
+        return None
 
-    return None
+    return _open_verified_chain(resolved, want_dir=False)
 
 
-def find_agy_binary() -> Optional[str]:
+def find_agy_binary() -> Optional[int]:
+    """Return an open, verified file descriptor for the `agy` binary, or
+    None. Callers must close the fd when done."""
     seen = set()
     candidates = []
 
@@ -125,9 +169,9 @@ def find_agy_binary() -> Optional[str]:
         if candidate in seen:
             continue
         seen.add(candidate)
-        verified = _verify_trusted_binary(candidate)
-        if verified:
-            return verified
+        fd = _verify_trusted_binary(candidate)
+        if fd is not None:
+            return fd
 
     return None
 
@@ -171,15 +215,23 @@ def _read_capped(proc: subprocess.Popen, timeout: float, max_bytes: int) -> tupl
 
 
 def run_agy_command(
-    agy_bin: str, cmd: str, timeout: int = 15, max_bytes: int = MAX_OUTPUT_BYTES
+    agy_fd: int, cmd: str, timeout: int = 15, max_bytes: int = MAX_OUTPUT_BYTES
 ) -> Optional[Dict[str, Any]]:
+    """Execute the already-open, verified binary fd `agy_fd` via its magic
+    /proc/self/fd symlink. Using the fd itself (kept alive across fork+exec
+    with pass_fds) rather than a pathname means the kernel executes exactly
+    the inode that was verified -- nothing is re-resolved by name at exec
+    time, so a swap of any path component after verification has no effect.
+    """
     proc: Optional[subprocess.Popen] = None
     try:
         proc = subprocess.Popen(
-            [agy_bin, "-p", cmd, "--output-format", "json"],
+            [f"/proc/self/fd/{agy_fd}", "-p", cmd, "--output-format", "json"],
+            executable=f"/proc/self/fd/{agy_fd}",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,  # own process group, for clean teardown
+            pass_fds=(agy_fd,),
         )
         stdout_b, truncated = _read_capped(proc, timeout, max_bytes)
         if truncated:
@@ -205,10 +257,73 @@ def run_agy_command(
     return None
 
 
-def read_cache(cache_file: Path) -> Optional[Dict[str, Any]]:
-    """Read the cache file without following symlinks, with a size cap."""
+def get_cache_dir_fd() -> Optional[int]:
+    """Create (if needed) and open the cache directory as a verified
+    directory file descriptor.
+
+    Every path component from the filesystem root down is opened with
+    `openat(..., O_NOFOLLOW)` and checked on its own fd -- never via a
+    pathname stat -- to be a real directory owned by root or the current
+    user. The final component is additionally required to be mode 0700
+    (tightened in place via `fchmod` on the retained fd if it drifted). All
+    later cache reads/writes happen relative to this fd via `dir_fd=`, so a
+    symlink swapped in anywhere in the chain, or at the final cache
+    directory itself, is never followed.
+    """
+    base = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")) / "omarchy"
+    if not base.is_absolute():
+        return None
+
+    parts = base.parts[1:]
+    fd = os.open("/", os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        fd = os.open(cache_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        for i, part in enumerate(parts):
+            is_last = i == len(parts) - 1
+            try:
+                os.mkdir(part, 0o700, dir_fd=fd)
+            except FileExistsError:
+                pass
+            except OSError:
+                if is_last:
+                    return None
+            try:
+                next_fd = os.open(part, os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+            except OSError:
+                return None
+            os.close(fd)
+            fd = next_fd
+
+            st = os.fstat(fd)
+            if not stat.S_ISDIR(st.st_mode):
+                return None
+            if st.st_uid not in (0, os.getuid()):
+                return None
+            if is_last:
+                if st.st_uid != os.getuid():
+                    return None
+                if stat.S_IMODE(st.st_mode) != 0o700:
+                    try:
+                        os.fchmod(fd, 0o700)
+                    except OSError:
+                        return None
+            elif st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+                return None
+        return fd
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return None
+
+
+def read_cache(cache_dir_fd: int) -> Optional[Dict[str, Any]]:
+    """Read the cache file relative to the verified cache directory fd,
+    without following symlinks, with a size cap."""
+    try:
+        fd = os.open(
+            CACHE_FILENAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=cache_dir_fd
+        )
     except OSError:
         return None
     try:
@@ -229,21 +344,32 @@ def read_cache(cache_file: Path) -> Optional[Dict[str, Any]]:
             os.close(fd)
 
 
-def write_cache(cache_file: Path, data: Dict[str, Any]) -> None:
+def write_cache(cache_dir_fd: int, data: Dict[str, Any]) -> None:
     """Write the cache atomically via an exclusive, randomly named temp file
-    in the same directory, so a predictable-path symlink attack can't
-    redirect the write."""
-    cache_dir = cache_file.parent
-    fd, tmp_path = tempfile.mkstemp(prefix=".antigravity-usage-", suffix=".tmp", dir=cache_dir)
+    created relative to the verified cache directory fd, then rename it into
+    place relative to that same fd. Using `dir_fd` for both the create and
+    the rename means neither step ever resolves a pathname through the
+    (potentially attacker-influenced) filesystem namespace -- only through
+    the directory fd we already verified."""
+    tmp_name = f".antigravity-usage-{os.getpid()}-{secrets.token_hex(8)}.tmp"
+    try:
+        fd = os.open(
+            tmp_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o600,
+            dir_fd=cache_dir_fd,
+        )
+    except OSError:
+        return
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp_path, cache_file)
+        os.replace(tmp_name, CACHE_FILENAME, src_dir_fd=cache_dir_fd, dst_dir_fd=cache_dir_fd)
     except OSError:
         try:
-            os.unlink(tmp_path)
+            os.unlink(tmp_name, dir_fd=cache_dir_fd)
         except OSError:
             pass
 
@@ -419,86 +545,100 @@ def main():
     parser.add_argument("--max-age", type=int, default=300, help="Max cache age in seconds (default 300)")
     args = parser.parse_args()
 
-    cache_file = get_cache_path()
+    cache_dir_fd = get_cache_dir_fd()
 
-    # If --cached-only or --cached requested, check cache
-    if args.cached or args.cached_only:
-        cached_data = read_cache(cache_file)
-        if cached_data is not None:
-            cached_ts = cached_data.get("timestamp", 0)
-            age = datetime.now().timestamp() - cached_ts
-            if args.cached_only or (args.cached and age < args.max_age and not args.force):
-                print(json.dumps(cached_data, indent=2))
-                return
+    def _read_cache() -> Optional[Dict[str, Any]]:
+        return read_cache(cache_dir_fd) if cache_dir_fd is not None else None
 
-    agy_bin = find_agy_binary()
-    if not agy_bin:
-        # Fallback to cache if available
-        cached = read_cache(cache_file)
-        if cached is not None:
-            cached["stale"] = True
-            cached["warning"] = "Antigravity binary 'agy' not found; displaying cached data"
-            print(json.dumps(cached, indent=2))
-            return
+    def _write_cache(data: Dict[str, Any]) -> None:
+        if cache_dir_fd is not None:
+            write_cache(cache_dir_fd, data)
 
-        err_resp = {
-            "status": "error",
-            "error": "Antigravity binary ('agy') not found in PATH or standard locations.",
-            "groups": [],
-            "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
-            "tooltip": "Antigravity CLI not found",
-        }
-        print(json.dumps(err_resp, indent=2))
-        return
-
-    # Run /usage and /model in parallel
     try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            fut_usage = executor.submit(run_agy_command, agy_bin, "/usage")
-            fut_model = executor.submit(run_agy_command, agy_bin, "/model")
-            usage_res = fut_usage.result()
-            model_res = fut_model.result()
+        # If --cached-only or --cached requested, check cache
+        if args.cached or args.cached_only:
+            cached_data = _read_cache()
+            if cached_data is not None:
+                cached_ts = cached_data.get("timestamp", 0)
+                age = datetime.now().timestamp() - cached_ts
+                if args.cached_only or (args.cached and age < args.max_age and not args.force):
+                    print(json.dumps(cached_data, indent=2))
+                    return
 
-        if not usage_res or usage_res.get("status") != "SUCCESS":
-            # Attempt to use stale cache
-            cached = read_cache(cache_file)
+        agy_fd = find_agy_binary()
+        if agy_fd is None:
+            # Fallback to cache if available
+            cached = _read_cache()
             if cached is not None:
                 cached["stale"] = True
+                cached["warning"] = "Antigravity binary 'agy' not found; displaying cached data"
                 print(json.dumps(cached, indent=2))
                 return
 
             err_resp = {
                 "status": "error",
-                "error": "Failed to get usage limits from agy.",
+                "error": "Antigravity binary ('agy') not found in PATH or standard locations.",
                 "groups": [],
                 "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
-                "tooltip": "Failed to get Antigravity usage",
+                "tooltip": "Antigravity CLI not found",
             }
             print(json.dumps(err_resp, indent=2))
             return
 
-        result = parse_usage_data(usage_res, model_res)
+        try:
+            # Run /usage and /model in parallel
+            try:
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    fut_usage = executor.submit(run_agy_command, agy_fd, "/usage")
+                    fut_model = executor.submit(run_agy_command, agy_fd, "/model")
+                    usage_res = fut_usage.result()
+                    model_res = fut_model.result()
 
-        # Save to cache
-        write_cache(cache_file, result)
+                if not usage_res or usage_res.get("status") != "SUCCESS":
+                    # Attempt to use stale cache
+                    cached = _read_cache()
+                    if cached is not None:
+                        cached["stale"] = True
+                        print(json.dumps(cached, indent=2))
+                        return
 
-        print(json.dumps(result, indent=2))
+                    err_resp = {
+                        "status": "error",
+                        "error": "Failed to get usage limits from agy.",
+                        "groups": [],
+                        "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
+                        "tooltip": "Failed to get Antigravity usage",
+                    }
+                    print(json.dumps(err_resp, indent=2))
+                    return
 
-    except Exception as e:
-        cached = read_cache(cache_file)
-        if cached is not None:
-            cached["stale"] = True
-            print(json.dumps(cached, indent=2))
-            return
+                result = parse_usage_data(usage_res, model_res)
 
-        err_resp = {
-            "status": "error",
-            "error": str(e),
-            "groups": [],
-            "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
-            "tooltip": f"Error: {e}",
-        }
-        print(json.dumps(err_resp, indent=2))
+                # Save to cache
+                _write_cache(result)
+
+                print(json.dumps(result, indent=2))
+
+            except Exception as e:
+                cached = _read_cache()
+                if cached is not None:
+                    cached["stale"] = True
+                    print(json.dumps(cached, indent=2))
+                    return
+
+                err_resp = {
+                    "status": "error",
+                    "error": str(e),
+                    "groups": [],
+                    "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
+                    "tooltip": f"Error: {e}",
+                }
+                print(json.dumps(err_resp, indent=2))
+        finally:
+            os.close(agy_fd)
+    finally:
+        if cache_dir_fd is not None:
+            os.close(cache_dir_fd)
 
 
 if __name__ == "__main__":
