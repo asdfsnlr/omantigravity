@@ -35,7 +35,7 @@ Before using the plugin, ensure the following dependencies and tools are availab
 
 - **Omarchy Linux**: Quickshell-powered desktop shell with third-party plugin support.
 - **Google Antigravity CLI (`agy`)**:
-  - The `agy` executable must be installed and accessible in your `PATH` (or standard paths such as `~/.local/share/mise/shims/agy`, `~/.gemini/antigravity-cli/bin/agy`, or `/usr/bin/agy`).
+  - The `agy` executable must be installed somewhere on disk, and you need to know its **full path** (e.g. `~/.local/share/mise/shims/agy`).
   - You must have logged in / authenticated at least once so `agy` can query your usage limits.
 - **Python 3**:
   - `python3` (3.8+) for running the background usage fetcher and cache engine (`scripts/fetch_usage.py`). Only uses Python standard library modules; no external `pip` dependencies are needed.
@@ -66,6 +66,23 @@ To update the plugin to the latest version at any time:
 omarchy plugin update asdfsnlr.omantigravity
 ```
 
+### Required: point the plugin at your `agy` binary
+
+For your safety, this plugin **never** auto-discovers or guesses the location of the `agy`
+executable — it will not search your `PATH` or probe common install directories. Until you
+tell it exactly where `agy` lives, the widget shows an "Antigravity CLI path not configured"
+error instead of running anything.
+
+Find the full path to your `agy` binary (e.g. `which agy` or `readlink -f "$(which agy)"`),
+then set it once via the `agyPath` setting:
+
+```bash
+omarchy bar set omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
+```
+
+You can also set it from the panel's settings form, wherever Omarchy exposes per-widget
+settings for bar plugins. The widget starts querying `agy` as soon as a valid path is saved.
+
 ---
 
 ## Configuration Options
@@ -74,6 +91,7 @@ Settings can be toggled directly in the panel UI, configured via `omarchy bar se
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
+| `agyPath` | string | `""` | **Required.** Full path to your `agy` binary. Never auto-discovered — the widget errors until this is set. |
 | `barMetric` | enum | `"gemini"` | Quota limit to show on the bar: `gemini`, `3p`, `lowest`, `gemini-5h`, `gemini-weekly`, `3p-5h`, `3p-weekly` |
 | `alertThresholdPct` | integer | `20` | Threshold percentage (5% – 50%) for low quota alerts |
 | `enableNotifications` | boolean | `true` | Send desktop notifications via `notify-send` when quota is critical |
@@ -84,6 +102,9 @@ Settings can be toggled directly in the panel UI, configured via `omarchy bar se
 ### CLI Configuration Examples
 
 ```bash
+# Point the plugin at your agy binary (required, see above)
+omarchy bar set omantigravity agyPath "/home/YOUR_USER/.local/share/mise/shims/agy" --json
+
 # Set metric to Gemini models (default)
 omarchy bar set omantigravity barMetric gemini
 
@@ -125,17 +146,23 @@ omarchy bar set omantigravity pollIntervalSec 120 --json
 
 ## CLI Script Usage
 
-The backend query engine `scripts/fetch_usage.py` can also be run standalone:
+The backend query engine `scripts/fetch_usage.py` can also be run standalone. Since the
+script never auto-discovers `agy`, pass its full path with `--agy-path` (or export
+`OMANTIGRAVITY_AGY_PATH` once instead of repeating the flag):
 
 ```bash
 # Return cached data if recent (<300s), otherwise fetch fresh from agy
-./scripts/fetch_usage.py --cached
+./scripts/fetch_usage.py --agy-path ~/.local/share/mise/shims/agy --cached
 
 # Force a fresh real-time fetch from agy
-./scripts/fetch_usage.py --force
+./scripts/fetch_usage.py --agy-path ~/.local/share/mise/shims/agy --force
 
-# Return current cache immediately without waiting
+# Return current cache immediately without waiting (no agy path needed)
 ./scripts/fetch_usage.py --cached-only
+
+# Or set it once for the session
+export OMANTIGRAVITY_AGY_PATH=~/.local/share/mise/shims/agy
+./scripts/fetch_usage.py --force
 ```
 
 ---
