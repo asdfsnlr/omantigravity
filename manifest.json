@@ -19,6 +19,7 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
+      "agyPath": "",
       "pollIntervalSec": 300,
       "showPercentageInBar": true,
       "barMetric": "gemini",
@@ -27,6 +28,13 @@
       "enableNotifications": true
     },
     "schema": [
+      {
+        "key": "agyPath",
+        "type": "string",
+        "label": "Antigravity CLI (agy) path",
+        "description": "Full path to your installed agy binary (e.g. ~/.local/share/mise/shims/agy). Required -- for your safety this plugin never guesses or auto-discovers it.",
+        "defaultValue": ""
+      },
       {
         "key": "pollIntervalSec",
         "type": "integer",

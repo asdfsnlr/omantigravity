@@ -21,6 +21,7 @@ Panel {
   property var exactResetMap: ({})
 
   // ── Settings ────────────────────────────────────────────────────────────────
+  property string agyPath: ""
   property int pollIntervalSec: 300
   property bool showPercentageInBar: true
   property string barMetric: "gemini"
@@ -49,6 +50,7 @@ Panel {
   }
 
   function applySettings() {
+    agyPath = String(setting("agyPath", ""))
     pollIntervalSec = Math.max(30, Math.min(3600, setting("pollIntervalSec", 300)))
     pollTimer.interval = pollIntervalSec * 1000
     showPercentageInBar = setting("showPercentageInBar", true)
@@ -178,6 +180,7 @@ Panel {
     var args = ["python3", scriptPath]
     if (force) args.push("--force")
     else args.push("--cached")
+    if (root.agyPath.length > 0) args.push("--agy-path", root.agyPath)
     fetchProc.command = args
     fetchProc.running = true
   }

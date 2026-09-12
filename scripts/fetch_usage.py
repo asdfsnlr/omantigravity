@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 import secrets
 import selectors
-import shutil
 import signal
 import stat
 import subprocess
@@ -32,28 +31,9 @@ CACHE_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
 
 CACHE_FILENAME = "antigravity-usage.json"
 
-# Only binaries resolving (after following symlinks) into one of these
-# directories are trusted to run as `agy`. This intentionally excludes the
-# rest of PATH, since an arbitrary PATH entry may be user- or world-writable.
-# This allowlist alone is *not* the security boundary -- see
-# _open_verified_chain() below, which re-walks and re-checks every directory
-# component on its own file descriptors before anything is executed.
-_TRUSTED_AGY_DIRS = [
-    Path.home() / ".local/share/mise/installs/antigravity-cli",
-    Path.home() / ".local/share/mise/shims",
-    Path.home() / ".gemini/antigravity-cli/bin",
-    Path("/usr/local/bin"),
-    Path("/usr/bin"),
-    Path.home() / ".local/bin",
-]
-
-
-def _is_within(path: Path, parent: Path) -> bool:
-    try:
-        path.relative_to(parent)
-        return True
-    except ValueError:
-        return False
+# Environment variable fallback for the explicitly configured agy path, used
+# when this script isn't invoked with --agy-path (e.g. manual/CLI use).
+AGY_PATH_ENV_VAR = "OMANTIGRAVITY_AGY_PATH"
 
 
 def _owner_and_mode_ok(st: os.stat_result, *, writable_check: int) -> bool:
@@ -113,67 +93,39 @@ def _open_verified_chain(resolved: Path, want_dir: bool) -> Optional[int]:
         return None
 
 
-def _verify_trusted_binary(candidate: Path) -> Optional[int]:
-    """Resolve `candidate` and, if it is safe to execute as `agy`, return an
-    already-open, fully-verified read-only file descriptor for it.
+def find_agy_binary(configured_path: Optional[str]) -> Optional[int]:
+    """Return an open, verified file descriptor for the `agy` binary, or
+    None. Callers must close the fd when done.
 
-    The candidate must resolve inside one of the fixed trusted install
-    directories (policy allowlist), and every component of that resolved
-    path -- including all ancestor directories -- must independently pass
-    `_open_verified_chain()`'s fd-based ownership/permission checks. The
-    returned fd is the exact file that gets executed later, so there is no
-    later re-open-by-path step for an attacker to race.
+    There is deliberately no automatic discovery here (no PATH search, no
+    shutil.which, no guessing at mise/shim/home install locations). A file
+    merely sitting at a conventional path and being owned/executable by the
+    current user proves nothing about *what* it is -- it could be an
+    unrelated or substituted program, and silently executing it would hand
+    over the user's AI session/credentials without their knowledge.
+
+    Instead we only ever execute the exact path the user explicitly
+    configured (the plugin's "agyPath" setting, passed in as
+    `configured_path`, or the OMANTIGRAVITY_AGY_PATH env var as a CLI-only
+    fallback). That explicit choice is the provenance/consent boundary; the
+    fd-chain verification below is defense in depth on top of it, not a
+    substitute for it, so a configured path that fails those checks is
+    still rejected.
     """
+    raw = configured_path or os.environ.get(AGY_PATH_ENV_VAR)
+    if not raw:
+        return None
+
+    candidate = Path(os.path.expanduser(os.path.expandvars(raw)))
+    if not candidate.is_absolute():
+        return None
+
     try:
         resolved = candidate.resolve(strict=True)
     except (OSError, RuntimeError):
         return None
 
-    trusted = False
-    for trusted_dir in _TRUSTED_AGY_DIRS:
-        try:
-            resolved_dir = trusted_dir.resolve(strict=True)
-        except (OSError, RuntimeError):
-            continue
-        if _is_within(resolved, resolved_dir):
-            trusted = True
-            break
-    if not trusted:
-        return None
-
     return _open_verified_chain(resolved, want_dir=False)
-
-
-def find_agy_binary() -> Optional[int]:
-    """Return an open, verified file descriptor for the `agy` binary, or
-    None. Callers must close the fd when done."""
-    seen = set()
-    candidates = []
-
-    which_agy = shutil.which("agy")
-    if which_agy:
-        candidates.append(Path(which_agy))
-
-    candidates.extend(
-        [
-            Path.home() / ".local/share/mise/installs/antigravity-cli/latest/agy",
-            Path.home() / ".local/share/mise/shims/agy",
-            Path.home() / ".gemini/antigravity-cli/bin/agy",
-            Path("/usr/local/bin/agy"),
-            Path("/usr/bin/agy"),
-            Path.home() / ".local/bin/agy",
-        ]
-    )
-
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        fd = _verify_trusted_binary(candidate)
-        if fd is not None:
-            return fd
-
-    return None
 
 
 def _read_capped(proc: subprocess.Popen, timeout: float, max_bytes: int) -> tuple[bytes, bool]:
@@ -543,6 +495,12 @@ def main():
     parser.add_argument("--cached-only", action="store_true", help="Return cache immediately if exists")
     parser.add_argument("--force", action="store_true", help="Force fresh fetch from agy")
     parser.add_argument("--max-age", type=int, default=300, help="Max cache age in seconds (default 300)")
+    parser.add_argument(
+        "--agy-path",
+        default=None,
+        help="Explicit path to the agy binary (required; also settable via "
+        f"the {AGY_PATH_ENV_VAR} env var). Never auto-discovered.",
+    )
     args = parser.parse_args()
 
     cache_dir_fd = get_cache_dir_fd()
@@ -565,22 +523,26 @@ def main():
                     print(json.dumps(cached_data, indent=2))
                     return
 
-        agy_fd = find_agy_binary()
+        agy_fd = find_agy_binary(args.agy_path)
         if agy_fd is None:
             # Fallback to cache if available
             cached = _read_cache()
             if cached is not None:
                 cached["stale"] = True
-                cached["warning"] = "Antigravity binary 'agy' not found; displaying cached data"
+                cached["warning"] = "Antigravity CLI path not configured or invalid; displaying cached data"
                 print(json.dumps(cached, indent=2))
                 return
 
             err_resp = {
                 "status": "error",
-                "error": "Antigravity binary ('agy') not found in PATH or standard locations.",
+                "error": (
+                    "Antigravity CLI ('agy') path is not configured. Set the full path to "
+                    "your agy binary in the plugin's settings (agyPath), or the "
+                    f"{AGY_PATH_ENV_VAR} environment variable."
+                ),
                 "groups": [],
                 "overall": {"lowest_remaining_pct": 0, "alarming": False, "warning": False},
-                "tooltip": "Antigravity CLI not found",
+                "tooltip": "Antigravity CLI path not configured",
             }
             print(json.dumps(err_resp, indent=2))
             return
