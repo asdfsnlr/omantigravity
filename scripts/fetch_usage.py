@@ -12,54 +12,240 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import selectors
 import shutil
+import signal
+import stat
 import subprocess
 import sys
+import tempfile
+import time
 from typing import Any, Dict, List, Optional
+
+# Hard cap on combined stdout/stderr read from the `agy` CLI, to bound memory
+# use if the process is hostile or wedged and keeps producing output.
+MAX_OUTPUT_BYTES = 2 * 1024 * 1024  # 2 MiB
+
+# Hard cap on the cached usage JSON we will read back, so a huge or
+# never-ending cache file (e.g. a FIFO) can't exhaust the helper's memory.
+CACHE_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
+
+# Only binaries resolving (after following symlinks) into one of these
+# directories are trusted to run as `agy`. This intentionally excludes the
+# rest of PATH, since an arbitrary PATH entry may be user- or world-writable.
+_TRUSTED_AGY_DIRS = [
+    Path.home() / ".local/share/mise/installs/antigravity-cli",
+    Path.home() / ".local/share/mise/shims",
+    Path.home() / ".gemini/antigravity-cli/bin",
+    Path("/usr/local/bin"),
+    Path("/usr/bin"),
+    Path.home() / ".local/bin",
+]
+
+
+def get_cache_dir() -> Path:
+    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omarchy"
+    cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(cache_dir, 0o700)
+    except OSError:
+        pass
+    return cache_dir
 
 
 def get_cache_path() -> Path:
-    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omarchy"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / "antigravity-usage.json"
+    return get_cache_dir() / "antigravity-usage.json"
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _verify_trusted_binary(candidate: Path) -> Optional[str]:
+    """Resolve `candidate` and verify it is safe to execute as `agy`.
+
+    Requires: resolves to a real regular file, owned by root or the current
+    user, not group/other writable, executable, and located inside one of
+    the fixed trusted install directories (never an arbitrary PATH entry).
+    """
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+
+    try:
+        st = resolved.stat()
+    except OSError:
+        return None
+
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    if st.st_uid not in (0, os.getuid()):
+        return None
+    if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        return None
+    if not os.access(resolved, os.X_OK):
+        return None
+
+    for trusted_dir in _TRUSTED_AGY_DIRS:
+        try:
+            resolved_dir = trusted_dir.resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if _is_within(resolved, resolved_dir):
+            return str(resolved)
+
+    return None
 
 
 def find_agy_binary() -> Optional[str]:
-    # Check PATH first
-    agy = shutil.which("agy")
-    if agy and os.path.isfile(agy) and os.access(agy, os.X_OK):
-        return agy
+    seen = set()
+    candidates = []
 
-    # Common installation locations
-    candidates = [
-        Path.home() / ".local/share/mise/installs/antigravity-cli/latest/agy",
-        Path.home() / ".local/share/mise/shims/agy",
-        Path.home() / ".gemini/antigravity-cli/bin/agy",
-        Path("/usr/local/bin/agy"),
-        Path("/usr/bin/agy"),
-        Path.home() / ".local/bin/agy",
-    ]
+    which_agy = shutil.which("agy")
+    if which_agy:
+        candidates.append(Path(which_agy))
+
+    candidates.extend(
+        [
+            Path.home() / ".local/share/mise/installs/antigravity-cli/latest/agy",
+            Path.home() / ".local/share/mise/shims/agy",
+            Path.home() / ".gemini/antigravity-cli/bin/agy",
+            Path("/usr/local/bin/agy"),
+            Path("/usr/bin/agy"),
+            Path.home() / ".local/bin/agy",
+        ]
+    )
+
     for candidate in candidates:
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            return str(candidate)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        verified = _verify_trusted_binary(candidate)
+        if verified:
+            return verified
 
     return None
 
 
-def run_agy_command(agy_bin: str, cmd: str, timeout: int = 15) -> Optional[Dict[str, Any]]:
+def _read_capped(proc: subprocess.Popen, timeout: float, max_bytes: int) -> tuple[bytes, bool]:
+    """Read proc.stdout/stderr with a byte cap and overall deadline.
+
+    Returns (stdout_bytes, truncated). Never raises on timeout/overflow;
+    the caller is responsible for killing the process group afterwards.
+    """
+    sel = selectors.DefaultSelector()
+    sel.register(proc.stdout, selectors.EVENT_READ, "stdout")
+    sel.register(proc.stderr, selectors.EVENT_READ, "stderr")
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    open_streams = {"stdout", "stderr"}
+    deadline = time.monotonic() + timeout
+    truncated = False
+
+    while open_streams:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            truncated = True
+            break
+        for key, _ in sel.select(timeout=min(remaining, 0.5)):
+            name = key.data
+            try:
+                chunk = os.read(key.fileobj.fileno(), 65536)
+            except OSError:
+                chunk = b""
+            if not chunk:
+                sel.unregister(key.fileobj)
+                open_streams.discard(name)
+                continue
+            buffers[name].extend(chunk)
+            if len(buffers[name]) > max_bytes:
+                truncated = True
+                open_streams.clear()
+                break
+
+    return bytes(buffers["stdout"][:max_bytes]), truncated
+
+
+def run_agy_command(
+    agy_bin: str, cmd: str, timeout: int = 15, max_bytes: int = MAX_OUTPUT_BYTES
+) -> Optional[Dict[str, Any]]:
+    proc: Optional[subprocess.Popen] = None
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             [agy_bin, "-p", cmd, "--output-format", "json"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,  # own process group, for clean teardown
         )
-        if proc.returncode == 0 and proc.stdout.strip():
-            return json.loads(proc.stdout)
+        stdout_b, truncated = _read_capped(proc, timeout, max_bytes)
+        if truncated:
+            return None
+        try:
+            returncode = proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            return None
+        if returncode == 0 and stdout_b.strip():
+            return json.loads(stdout_b.decode("utf-8", errors="replace"))
     except Exception:
         pass
+    finally:
+        if proc is not None and proc.poll() is None:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                pass
     return None
+
+
+def read_cache(cache_file: Path) -> Optional[Dict[str, Any]]:
+    """Read the cache file without following symlinks, with a size cap."""
+    try:
+        fd = os.open(cache_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return None
+        if st.st_uid != os.getuid():
+            return None
+        if st.st_size > CACHE_MAX_BYTES:
+            return None
+        with os.fdopen(fd, "r", encoding="utf-8") as f:
+            fd = -1  # ownership transferred to the file object
+            return json.load(f)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    finally:
+        if fd != -1:
+            os.close(fd)
+
+
+def write_cache(cache_file: Path, data: Dict[str, Any]) -> None:
+    """Write the cache atomically via an exclusive, randomly named temp file
+    in the same directory, so a predictable-path symlink attack can't
+    redirect the write."""
+    cache_dir = cache_file.parent
+    fd, tmp_path = tempfile.mkstemp(prefix=".antigravity-usage-", suffix=".tmp", dir=cache_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, cache_file)
+    except OSError:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def format_countdown(iso_str: str) -> str:
@@ -236,31 +422,24 @@ def main():
     cache_file = get_cache_path()
 
     # If --cached-only or --cached requested, check cache
-    if (args.cached or args.cached_only) and cache_file.is_file():
-        try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                cached_data = json.load(f)
+    if args.cached or args.cached_only:
+        cached_data = read_cache(cache_file)
+        if cached_data is not None:
             cached_ts = cached_data.get("timestamp", 0)
             age = datetime.now().timestamp() - cached_ts
             if args.cached_only or (args.cached and age < args.max_age and not args.force):
                 print(json.dumps(cached_data, indent=2))
                 return
-        except Exception:
-            pass
 
     agy_bin = find_agy_binary()
     if not agy_bin:
         # Fallback to cache if available
-        if cache_file.is_file():
-            try:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    cached = json.load(f)
-                cached["stale"] = True
-                cached["warning"] = "Antigravity binary 'agy' not found; displaying cached data"
-                print(json.dumps(cached, indent=2))
-                return
-            except Exception:
-                pass
+        cached = read_cache(cache_file)
+        if cached is not None:
+            cached["stale"] = True
+            cached["warning"] = "Antigravity binary 'agy' not found; displaying cached data"
+            print(json.dumps(cached, indent=2))
+            return
 
         err_resp = {
             "status": "error",
@@ -282,15 +461,11 @@ def main():
 
         if not usage_res or usage_res.get("status") != "SUCCESS":
             # Attempt to use stale cache
-            if cache_file.is_file():
-                try:
-                    with open(cache_file, "r", encoding="utf-8") as f:
-                        cached = json.load(f)
-                    cached["stale"] = True
-                    print(json.dumps(cached, indent=2))
-                    return
-                except Exception:
-                    pass
+            cached = read_cache(cache_file)
+            if cached is not None:
+                cached["stale"] = True
+                print(json.dumps(cached, indent=2))
+                return
 
             err_resp = {
                 "status": "error",
@@ -305,26 +480,16 @@ def main():
         result = parse_usage_data(usage_res, model_res)
 
         # Save to cache
-        try:
-            temp_file = cache_file.with_suffix(".tmp")
-            with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=2)
-            temp_file.replace(cache_file)
-        except Exception:
-            pass
+        write_cache(cache_file, result)
 
         print(json.dumps(result, indent=2))
 
     except Exception as e:
-        if cache_file.is_file():
-            try:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    cached = json.load(f)
-                cached["stale"] = True
-                print(json.dumps(cached, indent=2))
-                return
-            except Exception:
-                pass
+        cached = read_cache(cache_file)
+        if cached is not None:
+            cached["stale"] = True
+            print(json.dumps(cached, indent=2))
+            return
 
         err_resp = {
             "status": "error",
